@@ -1,9 +1,11 @@
 name: Sync data
 
 on:
-  schedule:
-    # 06:00 UTC daily — after the prior legislative day is published.
-    - cron: "0 6 * * *"
+  # Nightly schedule is PAUSED while the UI is being built out, to avoid
+  # consistent API calls. Re-enable by uncommenting the two lines below.
+  # schedule:
+  #   # 06:00 UTC daily — after the prior legislative day is published.
+  #   - cron: "0 6 * * *"
   workflow_dispatch:
     inputs:
       votes_per_chamber:
