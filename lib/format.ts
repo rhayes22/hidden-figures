@@ -37,6 +37,39 @@ export function seatLabel(member: {
   return `Representative · ${member.state}-${member.district === "0" ? "AL" : member.district} (${district})`;
 }
 
+export type Position = "yea" | "nay" | "present" | "not_voting";
+
+export type PartyBreakdownRow = {
+  party: string;
+  yea: number;
+  nay: number;
+  present: number;
+  not_voting: number;
+};
+
+// Groups roster positions into a per-party tally, ordered D, R, then others.
+export function partyBreakdown(
+  rows: Array<{ party: string; position: string }>,
+): PartyBreakdownRow[] {
+  const map = new Map<string, PartyBreakdownRow>();
+  for (const r of rows) {
+    const row = map.get(r.party) ?? {
+      party: r.party,
+      yea: 0,
+      nay: 0,
+      present: 0,
+      not_voting: 0,
+    };
+    row[r.position as Position] += 1;
+    map.set(r.party, row);
+  }
+  const order = (p: string) =>
+    p === "Democrat" ? 0 : p === "Republican" ? 1 : 2;
+  return [...map.values()].sort(
+    (a, b) => order(a.party) - order(b.party) || a.party.localeCompare(b.party),
+  );
+}
+
 export function formatDate(isoDate: string): string {
   const [y, m, d] = isoDate.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", {
