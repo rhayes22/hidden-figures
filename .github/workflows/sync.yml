@@ -1,0 +1,33 @@
+name: Sync data
+
+on:
+  schedule:
+    # 06:00 UTC daily — after the prior legislative day is published.
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      votes_per_chamber:
+        description: "Roll calls to sync per chamber (raise to backfill)"
+        default: "30"
+
+concurrency:
+  group: sync-data
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      CONGRESS_GOV_API_KEY: ${{ secrets.CONGRESS_GOV_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Sync members
+        run: npm run sync:members
+      - name: Sync votes
+        run: npm run sync:votes -- ${{ github.event.inputs.votes_per_chamber || '30' }}
