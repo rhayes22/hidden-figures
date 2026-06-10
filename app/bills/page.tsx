@@ -1,120 +1,118 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
-import { parseBillQuery } from "@/lib/bill-search";
-import { formatDate } from "@/lib/format";
+import { BillsBrowser, type LegItem } from "@/components/bills-browser";
+import {
+  billPhase,
+  categoryForBillType,
+  categoryForQuestion,
+  votePhase,
+} from "@/lib/legislation";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Bills",
+  title: "Votes & Legislation",
   description:
-    "Search bills before the U.S. Congress by number or title, and see how members voted.",
+    "Browse everything the U.S. Congress voted on — bills, resolutions, nominations, and motions — by chamber and type.",
 };
 
-type Props = { searchParams: Promise<{ q?: string }> };
-
-type BillRow = {
-  id: string;
-  billType: string;
-  number: number;
-  title: string;
-  status: string | null;
-  latestActionDate: string | null;
-  rollCallCount: number;
+type Row = {
+  rc_id: string;
+  bill_id: string | null;
+  chamber: string;
+  vote_date: string;
+  question: string;
+  result: string;
+  bill_type: string | null;
+  bill_number: number | null;
+  bill_title: string | null;
+  bill_status: string | null;
+  yea: number;
+  nay: number;
 };
 
-async function searchBills(q: string): Promise<BillRow[]> {
-  const parsed = parseBillQuery(q);
-  const cond = parsed
-    ? parsed.billType
-      ? sql`b.bill_type = ${parsed.billType} AND b.number = ${parsed.number}`
-      : sql`b.number = ${parsed.number}`
-    : q.trim()
-      ? sql`b.title ILIKE ${`%${q.trim()}%`}`
-      : sql`TRUE`;
-
-  const rows = await db.execute(sql`
-    SELECT b.id, b.bill_type AS "billType", b.number, b.title, b.status,
-           b.latest_action_date AS "latestActionDate",
-           count(rc.id)::int AS "rollCallCount"
-    FROM bills b
-    LEFT JOIN roll_calls rc ON rc.bill_id = b.id
-    WHERE ${cond}
-    GROUP BY b.id
-    ORDER BY b.latest_action_date DESC NULLS LAST
-    LIMIT 100
+async function getItems(): Promise<LegItem[]> {
+  const res = await db.execute(sql`
+    SELECT rc.id AS rc_id, rc.bill_id, rc.chamber, rc.vote_date::text AS vote_date,
+           rc.question, rc.result,
+           b.bill_type, b.number AS bill_number, b.title AS bill_title,
+           b.status AS bill_status,
+           count(vp.*) FILTER (WHERE vp.position = 'yea')::int AS yea,
+           count(vp.*) FILTER (WHERE vp.position = 'nay')::int AS nay
+    FROM roll_calls rc
+    LEFT JOIN bills b ON b.id = rc.bill_id
+    LEFT JOIN vote_positions vp ON vp.roll_call_id = rc.id
+    GROUP BY rc.id, b.id
+    ORDER BY rc.vote_date DESC, rc.roll_number DESC
   `);
-  return rows.rows as BillRow[];
+  const rows = res.rows as Row[];
+
+  const items: LegItem[] = [];
+  const billGroups = new Map<string, Row[]>();
+
+  for (const row of rows) {
+    if (row.bill_id) {
+      const group = billGroups.get(row.bill_id) ?? [];
+      group.push(row);
+      billGroups.set(row.bill_id, group);
+    } else {
+      const category = categoryForQuestion(row.question);
+      items.push({
+        key: row.rc_id,
+        href: `/votes/${row.rc_id}`,
+        category,
+        chambers: [row.chamber],
+        originChamber: row.chamber as "house" | "senate",
+        label: row.question.replace(/^On the |^On /i, ""),
+        title: row.question,
+        date: row.vote_date,
+        yea: row.yea,
+        nay: row.nay,
+        phase: votePhase(row.result),
+      });
+    }
+  }
+
+  for (const [billId, group] of billGroups) {
+    const latest = group[0]; // rows are date-desc
+    const billType = latest.bill_type!;
+    items.push({
+      key: billId,
+      href: `/bills/${billId}`,
+      category: categoryForBillType(billType),
+      chambers: [...new Set(group.map((r) => r.chamber))],
+      originChamber: billType.startsWith("h") ? "house" : "senate",
+      label: `${billType.toUpperCase()} ${latest.bill_number}`,
+      title: latest.bill_title ?? latest.question,
+      date: latest.vote_date,
+      yea: latest.yea,
+      nay: latest.nay,
+      phase: billPhase({
+        status: latest.bill_status,
+        rollCalls: group.map((r) => ({
+          chamber: r.chamber,
+          result: r.result,
+          question: r.question,
+        })),
+      }),
+    });
+  }
+
+  items.sort((a, b) => b.date.localeCompare(a.date));
+  return items;
 }
 
-export default async function BillsPage({ searchParams }: Props) {
-  const { q = "" } = await searchParams;
-  const results = await searchBills(q);
-
+export default async function BillsPage() {
+  const items = await getItems();
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
-      <h1 className="text-3xl font-bold text-gray-900">Bills</h1>
+      <h1 className="text-3xl font-bold text-gray-900">Votes &amp; legislation</h1>
       <p className="mt-2 text-gray-600">
-        Search by number (e.g. <span className="font-mono">HR 1234</span>) or by
-        words in the title. Only bills with recorded votes appear here for now.
+        Everything the current Congress has voted on — bills, resolutions,
+        nominations, and motions.
       </p>
-
-      <form action="/bills" method="get" className="mt-6 flex gap-2">
-        <input
-          type="search"
-          name="q"
-          defaultValue={q}
-          placeholder="HR 1234, or “labor”…"
-          aria-label="Search bills"
-          className="w-full rounded-full border-2 border-gray-200 px-5 py-3 text-gray-900 outline-none focus:border-flag-red"
-        />
-        <button
-          type="submit"
-          className="rounded-full bg-flag-blue px-6 py-3 font-semibold text-white hover:bg-flag-blue-deep"
-        >
-          Search
-        </button>
-      </form>
-
-      <p className="mt-6 text-sm text-gray-500">
-        {q ? `${results.length} result${results.length === 1 ? "" : "s"} for “${q}”` : `${results.length} bills with recorded votes`}
-      </p>
-
-      <ul className="mt-3 divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white">
-        {results.map((bill) => (
-          <li key={bill.id}>
-            <Link
-              href={`/bills/${bill.id}`}
-              className="block px-5 py-4 hover:bg-flag-blue-soft/50"
-            >
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="font-mono text-xs font-semibold uppercase text-flag-blue">
-                  {bill.billType} {bill.number}
-                </span>
-                {bill.latestActionDate && (
-                  <span className="shrink-0 text-xs text-gray-400">
-                    {formatDate(bill.latestActionDate)}
-                  </span>
-                )}
-              </div>
-              <p className="mt-1 font-medium text-gray-900">{bill.title}</p>
-              <p className="mt-1 text-xs text-gray-500">
-                {bill.rollCallCount} recorded vote
-                {bill.rollCallCount === 1 ? "" : "s"}
-                {bill.status ? ` · ${bill.status}` : ""}
-              </p>
-            </Link>
-          </li>
-        ))}
-      </ul>
-      {results.length === 0 && (
-        <p className="mt-6 rounded-xl border border-dashed border-gray-300 p-6 text-sm text-gray-500">
-          No bills match. Try a bill number like “HR 1” or a word from the
-          title.
-        </p>
-      )}
+      <BillsBrowser items={items} />
     </div>
   );
 }
