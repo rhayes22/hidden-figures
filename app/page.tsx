@@ -231,12 +231,16 @@ export default async function HomePage() {
               record.
             </p>
           </Link>
-          <div className="rounded-xl border border-dashed border-gray-300 p-6">
-            <h3 className="font-bold text-gray-400">Browse bills</h3>
-            <p className="mt-2 text-sm text-gray-400">
-              Bill search and full yea/nay rosters — coming soon.
+          <Link
+            href="/bills"
+            className="rounded-xl border border-gray-200 bg-white p-6 transition-shadow hover:shadow-md"
+          >
+            <h3 className="font-bold text-flag-blue">Browse bills →</h3>
+            <p className="mt-2 text-sm text-gray-600">
+              Search by number or title and see the full yea/nay roster for
+              each vote.
             </p>
-          </div>
+          </Link>
         </section>
       </div>
     </>
