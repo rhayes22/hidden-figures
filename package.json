@@ -14,6 +14,7 @@
     "test": "vitest run",
     "sync:members": "tsx scripts/sync-members.ts",
     "sync:votes": "tsx scripts/sync-votes.ts",
+    "sync:all": "npm run sync:members && npm run sync:votes",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio"

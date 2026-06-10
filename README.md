@@ -60,7 +60,18 @@ The repo is connected to Vercel, so **every push to `main` deploys to production
 
 2. **Node version** — pinned to 22 via `engines.node` in `package.json` and `.nvmrc`; Vercel honors both.
 
-Data is refreshed by running `npm run sync:members` / `npm run sync:votes` (against the same `DATABASE_URL`); these are not part of the Vercel build. A nightly GitHub Actions cron to run them on a schedule is still to come.
+## Data refresh
+
+Ingestion is separate from the Vercel build. A GitHub Actions workflow ([.github/workflows/sync.yml](.github/workflows/sync.yml)) runs nightly at 06:00 UTC, syncing members then the latest roll calls into Neon (idempotent upserts). It can also be run manually from the Actions tab with a custom **roll calls per chamber** count to backfill further.
+
+Locally, against the same `DATABASE_URL`:
+
+```bash
+npm run sync:members         # current roster
+npm run sync:votes           # latest 30 roll calls per chamber
+npm run sync:votes -- 250    # backfill the whole current session
+npm run sync:all             # members + votes
+```
 
 ## Database workflow
 
