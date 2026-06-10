@@ -31,6 +31,9 @@ export const legislators = pgTable("legislators", {
   photoUrl: text("photo_url"),
   termStart: date("term_start"),
   termEnd: date("term_end"),
+  memberSince: date("member_since"), // start of their earliest term
+  billsSponsored: integer("bills_sponsored"),
+  billsCosponsored: integer("bills_cosponsored"),
 });
 
 export const bills = pgTable("bills", {

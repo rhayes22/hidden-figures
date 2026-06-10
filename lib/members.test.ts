@@ -30,6 +30,8 @@ describe("toLegislatorRow", () => {
       inOffice: true,
       termStart: "2025-01-03",
       termEnd: "2031-01-03",
+      // earliest term, not the current one
+      memberSince: "2013-01-03",
     });
   });
 

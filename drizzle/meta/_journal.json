@@ -8,6 +8,13 @@
       "when": 1781066581065,
       "tag": "0000_ordinary_paibok",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1781124358653,
+      "tag": "0001_tan_yellow_claw",
+      "breakpoints": true
     }
   ]
 }
