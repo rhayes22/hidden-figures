@@ -142,16 +142,30 @@ export default async function MemberPage({ params }: Props) {
             </p>
 
             <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-gray-200/70 pt-4 sm:grid-cols-4">
-              {member.termEnd && (
-                <Stat label="Term ends" value={formatDate(member.termEnd)} />
+              {member.memberSince && (
+                <Stat
+                  label="In office since"
+                  value={member.memberSince.slice(0, 4)}
+                />
+              )}
+              {member.billsSponsored != null && (
+                <Stat label="Bills sponsored" value={member.billsSponsored} />
+              )}
+              {member.billsCosponsored != null && (
+                <Stat label="Bills cosponsored" value={member.billsCosponsored} />
               )}
               <Stat label="Recorded votes" value={stats.total} />
-              <Stat label="Voted yea" value={stats.yea} accent="text-green-700" />
-              <Stat label="Voted nay" value={stats.nay} accent="text-flag-red" />
-              {stats.missed > 0 && (
-                <Stat label="Missed" value={stats.missed} accent="text-gray-500" />
-              )}
             </dl>
+            <p className="mt-3 text-xs text-gray-500">
+              On recorded votes:{" "}
+              <span className="font-semibold text-green-700">{stats.yea} yea</span>
+              {" · "}
+              <span className="font-semibold text-flag-red">{stats.nay} nay</span>
+              {stats.missed > 0 && <> · {stats.missed} not voting</>}
+              {member.termEnd && (
+                <> · term ends {formatDate(member.termEnd)}</>
+              )}
+            </p>
           </div>
         </div>
       </section>

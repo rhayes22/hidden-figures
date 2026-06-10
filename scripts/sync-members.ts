@@ -13,6 +13,55 @@ import { toLegislatorRow, type LegislatorRecord } from "../lib/members";
 const SOURCE_URL =
   "https://raw.githubusercontent.com/unitedstates/congress-legislators/main/legislators-current.yaml";
 
+// Sponsorship counts from the Congress.gov member endpoint. Best-effort:
+// returns nulls on any failure so the core member sync never breaks.
+async function fetchSponsorship(
+  bioguide: string,
+  apiKey: string,
+): Promise<{ sponsored: number | null; cosponsored: number | null }> {
+  try {
+    const res = await fetch(
+      `https://api.congress.gov/v3/member/${bioguide}?format=json&api_key=${apiKey}`,
+    );
+    if (!res.ok) return { sponsored: null, cosponsored: null };
+    const member = (
+      (await res.json()) as {
+        member?: {
+          sponsoredLegislation?: { count?: number };
+          cosponsoredLegislation?: { count?: number };
+        };
+      }
+    ).member;
+    return {
+      sponsored: member?.sponsoredLegislation?.count ?? null,
+      cosponsored: member?.cosponsoredLegislation?.count ?? null,
+    };
+  } catch {
+    return { sponsored: null, cosponsored: null };
+  }
+}
+
+// Populate sponsorship counts in batches to stay polite to the API.
+async function addSponsorshipCounts(
+  rows: Array<{ id: string; billsSponsored?: number | null; billsCosponsored?: number | null }>,
+  apiKey: string,
+): Promise<number> {
+  const BATCH = 10;
+  let filled = 0;
+  for (let i = 0; i < rows.length; i += BATCH) {
+    const batch = rows.slice(i, i + BATCH);
+    await Promise.all(
+      batch.map(async (row) => {
+        const { sponsored, cosponsored } = await fetchSponsorship(row.id, apiKey);
+        row.billsSponsored = sponsored;
+        row.billsCosponsored = cosponsored;
+        if (sponsored !== null) filled += 1;
+      }),
+    );
+  }
+  return filled;
+}
+
 async function main() {
   console.log(`Fetching ${SOURCE_URL} ...`);
   const res = await fetch(SOURCE_URL);
@@ -27,6 +76,15 @@ async function main() {
     .filter((row) => row !== null);
   const skipped = records.length - rows.length;
   console.log(`Mapped ${rows.length} voting members (${skipped} non-voting skipped)`);
+
+  const apiKey = process.env.CONGRESS_GOV_API_KEY;
+  if (apiKey) {
+    process.stdout.write("Fetching sponsorship counts from Congress.gov ... ");
+    const filled = await addSponsorshipCounts(rows, apiKey);
+    console.log(`${filled}/${rows.length} populated`);
+  } else {
+    console.warn("CONGRESS_GOV_API_KEY not set — skipping sponsorship counts");
+  }
 
   await db
     .insert(legislators)
@@ -43,6 +101,9 @@ async function main() {
         photoUrl: sql`excluded.photo_url`,
         termStart: sql`excluded.term_start`,
         termEnd: sql`excluded.term_end`,
+        memberSince: sql`excluded.member_since`,
+        billsSponsored: sql`excluded.bills_sponsored`,
+        billsCosponsored: sql`excluded.bills_cosponsored`,
       },
     });
 

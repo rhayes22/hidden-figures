@@ -38,6 +38,8 @@ export function toLegislatorRow(rec: LegislatorRecord): LegislatorRow | null {
   if (chamber === "house" && NON_VOTING_JURISDICTIONS.has(term.state)) {
     return null;
   }
+  // Terms are chronological, so the first is when they first took office.
+  const memberSince = rec.terms[0]?.start ?? term.start;
   return {
     id: rec.id.bioguide,
     fullName:
@@ -50,5 +52,6 @@ export function toLegislatorRow(rec: LegislatorRecord): LegislatorRow | null {
     photoUrl: photoUrl(rec.id.bioguide),
     termStart: term.start,
     termEnd: term.end,
+    memberSince,
   };
 }
