@@ -69,7 +69,7 @@ describe("toLegislatorRow", () => {
 
   it("builds the headshot URL from the bioguide id", () => {
     expect(toLegislatorRow(senator)?.photoUrl).toBe(
-      "https://theunitedstates.io/images/congress/450x550/W000817.jpg",
+      "https://raw.githubusercontent.com/unitedstates/images/gh-pages/congress/450x550/W000817.jpg",
     );
   });
 });
