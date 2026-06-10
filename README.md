@@ -58,6 +58,8 @@ The repo is connected to Vercel, so **every push to `main` deploys to production
 
    Without `DATABASE_URL` the build still succeeds (the DB is only touched at request time), but pages will error at runtime until it's set.
 
+   Optionally set `NEXT_PUBLIC_SITE_URL` (e.g. `https://hiddenfigures.vote`) so `sitemap.xml`, `robots.txt`, and Open Graph tags use your canonical domain. It falls back to the Vercel deployment URL if unset.
+
 2. **Node version** — pinned to 22 via `engines.node` in `package.json` and `.nvmrc`; Vercel honors both.
 
 ## Data refresh

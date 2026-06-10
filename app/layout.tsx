@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
+import { SITE_URL } from "@/lib/site";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,18 +15,26 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
     default: "Hidden Figures — Congressional Voting Records",
     template: "%s · Hidden Figures",
   },
   description:
     "Search any member of the U.S. Congress and see how they voted. Every roll call, every member, updated daily.",
+  openGraph: {
+    title: "Hidden Figures — Congressional Voting Records",
+    description:
+      "How did your representatives actually vote? Search any member of Congress or any bill.",
+    siteName: "Hidden Figures",
+    type: "website",
+  },
 };
 
 const navLinks = [
   { href: "/members", label: "Members", live: true },
   { href: "/bills", label: "Bills", live: true },
-  { href: "/about", label: "About", live: false },
+  { href: "/about", label: "About", live: true },
 ];
 
 export default function RootLayout({
