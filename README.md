@@ -25,9 +25,9 @@ The 535 voting members of the current (119th) Congress — House and Senate. His
 | [unitedstates/congress-legislators](https://github.com/unitedstates/congress-legislators) | Member roster + ID crosswalk |
 | [unitedstates/images](https://github.com/unitedstates/images) | Member headshots |
 
-## Local setup
+## Run it locally
 
-Requires Node 22+. Secrets live in `.env` (git-ignored):
+Requires **Node 22** (`.nvmrc` pins it — run `nvm use` if you use nvm). Secrets live in `.env` (git-ignored):
 
 ```
 CONGRESS_GOV_API_KEY=...   # free key from api.congress.gov/sign-up
@@ -35,10 +35,32 @@ DATABASE_URL=...           # Neon pooled connection string
 ```
 
 ```bash
+nvm use              # selects Node 22 (skip if 22 is already your default)
 npm install
-npm run db:migrate   # apply migrations to the database
 npm run dev          # http://localhost:3000
 ```
+
+The dev server serves the full site at **http://localhost:3000** against the live Neon database — no local Postgres needed. The schema is already migrated; you only need `npm run db:migrate` if you change `db/schema.ts`.
+
+Useful checks before pushing:
+
+```bash
+npm run lint && npm run typecheck && npm test && npm run build
+```
+
+## Deploying to Vercel
+
+The repo is connected to Vercel, so **every push to `main` deploys to production** and every PR gets a preview URL automatically. Two things the deploy needs:
+
+1. **Environment variables** — in the Vercel project (Settings → Environment Variables), set the same two keys as `.env`, for Production **and** Preview:
+   - `DATABASE_URL` (Neon pooled connection string)
+   - `CONGRESS_GOV_API_KEY`
+
+   Without `DATABASE_URL` the build still succeeds (the DB is only touched at request time), but pages will error at runtime until it's set.
+
+2. **Node version** — pinned to 22 via `engines.node` in `package.json` and `.nvmrc`; Vercel honors both.
+
+Data is refreshed by running `npm run sync:members` / `npm run sync:votes` (against the same `DATABASE_URL`); these are not part of the Vercel build. A nightly GitHub Actions cron to run them on a schedule is still to come.
 
 ## Database workflow
 
