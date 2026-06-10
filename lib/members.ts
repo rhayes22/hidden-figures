@@ -22,8 +22,10 @@ export type LegislatorRow = typeof legislators.$inferInsert;
 // vote on the floor — the MVP tracks the 535 voting members only.
 const NON_VOTING_JURISDICTIONS = new Set(["DC", "PR", "GU", "VI", "AS", "MP"]);
 
+// theunitedstates.io (the project's CDN) returns 410 Gone; the same images
+// remain maintained on the repo's gh-pages branch.
 export function photoUrl(bioguideId: string): string {
-  return `https://theunitedstates.io/images/congress/450x550/${bioguideId}.jpg`;
+  return `https://raw.githubusercontent.com/unitedstates/images/gh-pages/congress/450x550/${bioguideId}.jpg`;
 }
 
 // Returns null for non-voting members, which the sync skips.
