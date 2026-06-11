@@ -9,6 +9,7 @@ import {
   categoryForBillType,
   categoryForQuestion,
   votePhase,
+  type Category,
 } from "@/lib/legislation";
 
 export const dynamic = "force-dynamic";
@@ -84,17 +85,126 @@ async function getRecentVotes(): Promise<RecentVote[]> {
   return rows.rows as RecentVote[];
 }
 
+const CATS: Category[] = [
+  "bill",
+  "resolution",
+  "nomination",
+  "motion",
+  "amendment",
+];
+
+type CatStats = { votedOn: number; passed: number; failed: number };
+type Performance = Record<Category, CatStats>;
+
+function emptyPerformance(): Performance {
+  return Object.fromEntries(
+    CATS.map((c) => [c, { votedOn: 0, passed: 0, failed: 0 }]),
+  ) as Performance;
+}
+
+// Per-chamber, per-category counts of roll calls voted on / passed / failed.
+async function getPerformance(): Promise<{
+  house: Performance;
+  senate: Performance;
+}> {
+  const res = await db.execute(sql`
+    SELECT rc.chamber, rc.result, rc.question, b.bill_type
+    FROM roll_calls rc
+    LEFT JOIN bills b ON b.id = rc.bill_id
+  `);
+  const rows = res.rows as Array<{
+    chamber: string;
+    result: string;
+    question: string;
+    bill_type: string | null;
+  }>;
+  const out = { house: emptyPerformance(), senate: emptyPerformance() };
+  for (const r of rows) {
+    if (r.chamber !== "house" && r.chamber !== "senate") continue;
+    const category = r.bill_type
+      ? categoryForBillType(r.bill_type)
+      : categoryForQuestion(r.question);
+    const cell = out[r.chamber][category];
+    cell.votedOn += 1;
+    const kind = votePhase(r.result).kind;
+    if (kind === "passed") cell.passed += 1;
+    else if (kind === "failed") cell.failed += 1;
+  }
+  return out;
+}
+
+function PerformanceTable({
+  title,
+  data,
+}: {
+  title: string;
+  data: Performance;
+}) {
+  const totals = CATS.reduce(
+    (acc, c) => ({
+      votedOn: acc.votedOn + data[c].votedOn,
+      passed: acc.passed + data[c].passed,
+      failed: acc.failed + data[c].failed,
+    }),
+    { votedOn: 0, passed: 0, failed: 0 },
+  );
+  return (
+    <section className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
+      <h3 className="text-lg font-bold text-gray-900">{title}</h3>
+      <table className="mt-4 w-full text-sm">
+        <thead>
+          <tr className="text-xs uppercase tracking-wide text-gray-400">
+            <th className="pb-2 text-left font-semibold">Type</th>
+            <th className="pb-2 text-right font-semibold">Voted on</th>
+            <th className="pb-2 text-right font-semibold">Passed</th>
+            <th className="pb-2 text-right font-semibold">Failed</th>
+          </tr>
+        </thead>
+        <tbody>
+          {CATS.map((c) => (
+            <tr key={c} className="border-t border-gray-100">
+              <td className="py-2 font-medium text-gray-800">
+                {CATEGORY_LABEL[c]}s
+              </td>
+              <td className="py-2 text-right tabular-nums text-gray-700">
+                {data[c].votedOn}
+              </td>
+              <td className="py-2 text-right tabular-nums font-medium text-green-700">
+                {data[c].passed}
+              </td>
+              <td className="py-2 text-right tabular-nums font-medium text-flag-red">
+                {data[c].failed}
+              </td>
+            </tr>
+          ))}
+          <tr className="border-t-2 border-gray-200 font-bold text-gray-900">
+            <td className="py-2">Total</td>
+            <td className="py-2 text-right tabular-nums">{totals.votedOn}</td>
+            <td className="py-2 text-right tabular-nums text-green-700">
+              {totals.passed}
+            </td>
+            <td className="py-2 text-right tabular-nums text-flag-red">
+              {totals.failed}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
 export default async function HomePage() {
-  const [stats, recentVotes] = await Promise.all([
+  const [stats, recentVotes, performance] = await Promise.all([
     getStats(),
     getRecentVotes(),
+    getPerformance(),
   ]);
   const inOffice = stats.senators + stats.representatives;
 
   return (
     <>
-      {/* Hero */}
-      <section className="bg-flag-blue bg-gradient-to-b from-flag-blue to-flag-blue-deep px-4 py-16 text-center text-white sm:py-20">
+      {/* Hero — fills the screen on load */}
+      <section className="flex min-h-screen flex-col items-center justify-center bg-flag-blue bg-gradient-to-b from-flag-blue to-flag-blue-deep px-4 py-16 text-center text-white">
         <h1 className="mx-auto max-w-3xl text-4xl font-bold tracking-tight sm:text-5xl">
           How did your representatives{" "}
           <span className="text-red-300">actually</span> vote?
@@ -111,40 +221,60 @@ export default async function HomePage() {
         </p>
       </section>
 
-      {/* Stats band */}
-      <section className="border-b border-gray-200 bg-white">
-        <div className="mx-auto grid max-w-6xl grid-cols-2 gap-6 px-4 py-8 text-center sm:grid-cols-4 sm:px-6">
-          <div>
-            <p className="text-3xl font-bold text-flag-blue">{inOffice}</p>
-            <p className="text-sm text-gray-500">Members in office</p>
+      <div className="mx-auto max-w-6xl space-y-12 px-4 py-12 sm:px-6">
+        {/* The 119th Congress */}
+        <section>
+          <h2 className="text-2xl font-bold text-gray-900">
+            The 119th Congress
+          </h2>
+          <div className="mt-6 grid grid-cols-2 gap-6 text-center sm:grid-cols-4">
+            <div>
+              <p className="text-3xl font-bold text-flag-blue">{inOffice}</p>
+              <p className="text-sm text-gray-500">Members in office</p>
+            </div>
+            <div>
+              <p className="text-3xl font-bold text-flag-blue">
+                {stats.senators}
+              </p>
+              <p className="text-sm text-gray-500">Senators</p>
+            </div>
+            <div>
+              <p className="text-3xl font-bold text-flag-blue">
+                {stats.representatives}
+              </p>
+              <p className="text-sm text-gray-500">Representatives</p>
+            </div>
+            <div>
+              <p className="text-3xl font-bold">
+                <span className="text-flag-blue">{stats.democrats}D</span>
+                <span className="text-gray-300"> / </span>
+                <span className="text-flag-red">{stats.republicans}R</span>
+                {stats.independents > 0 && (
+                  <span className="text-gray-500"> / {stats.independents}I</span>
+                )}
+              </p>
+              <p className="text-sm text-gray-500">Party split</p>
+            </div>
           </div>
-          <div>
-            <p className="text-3xl font-bold text-flag-blue">
-              {stats.senators}
-            </p>
-            <p className="text-sm text-gray-500">Senators</p>
-          </div>
-          <div>
-            <p className="text-3xl font-bold text-flag-blue">
-              {stats.representatives}
-            </p>
-            <p className="text-sm text-gray-500">Representatives</p>
-          </div>
-          <div>
-            <p className="text-3xl font-bold">
-              <span className="text-flag-blue">{stats.democrats}D</span>
-              <span className="text-gray-300"> / </span>
-              <span className="text-flag-red">{stats.republicans}R</span>
-              {stats.independents > 0 && (
-                <span className="text-gray-500"> / {stats.independents}I</span>
-              )}
-            </p>
-            <p className="text-sm text-gray-500">Party split</p>
-          </div>
-        </div>
-      </section>
+        </section>
 
-      <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
+        {/* Voting record by chamber */}
+        <section>
+          <h2 className="text-2xl font-bold text-gray-900">
+            How they&rsquo;ve voted
+          </h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Roll-call votes this Congress, by type and outcome.
+          </p>
+          <div className="mt-6 grid gap-6 lg:grid-cols-2">
+            <PerformanceTable
+              title="House of Representatives"
+              data={performance.house}
+            />
+            <PerformanceTable title="Senate" data={performance.senate} />
+          </div>
+        </section>
+
         {/* Recent votes */}
         <section>
           <div className="flex items-baseline justify-between">
@@ -159,7 +289,7 @@ export default async function HomePage() {
         </section>
 
         {/* Upcoming votes + quick links */}
-        <section className="mt-12 grid gap-4 lg:grid-cols-3">
+        <section className="grid gap-4 lg:grid-cols-3">
           <div className="rounded-xl border border-dashed border-gray-300 bg-flag-blue-soft/50 p-6">
             <h3 className="font-bold text-gray-900">Upcoming votes</h3>
             <p className="mt-2 text-sm text-gray-600">
