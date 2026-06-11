@@ -41,17 +41,25 @@ function Tally({ yea, nay }: { yea: number; nay: number }) {
   );
 }
 
-export function LegCard({ item }: { item: LegCardItem }) {
+export function LegCard({
+  item,
+  large = false,
+}: {
+  item: LegCardItem;
+  large?: boolean;
+}) {
   return (
     <Link
       href={item.href}
-      className={`block h-full rounded-xl border bg-white p-4 transition-shadow hover:shadow-md ${
-        item.phaseKind === "law" ? "border-amber-300" : "border-gray-200"
-      }`}
+      className={`flex h-full flex-col rounded-xl border bg-white transition-shadow hover:shadow-md ${
+        large ? "p-6" : "p-4"
+      } ${item.phaseKind === "law" ? "border-amber-300" : "border-gray-200"}`}
     >
       <div className="flex items-center gap-2">
         <span
-          className={`rounded px-2 py-0.5 font-mono text-xs font-bold uppercase ${
+          className={`rounded px-2 py-0.5 font-mono font-bold uppercase ${
+            large ? "text-sm" : "text-xs"
+          } ${
             item.chamber === "senate"
               ? "bg-flag-red-soft text-flag-red"
               : "bg-flag-blue-soft text-flag-blue"
@@ -60,18 +68,28 @@ export function LegCard({ item }: { item: LegCardItem }) {
           {item.label}
         </span>
         {item.category && (
-          <span className="text-xs text-gray-400">{item.category}</span>
+          <span className={large ? "text-sm text-gray-400" : "text-xs text-gray-400"}>
+            {item.category}
+          </span>
         )}
         <span
-          className={`ml-auto rounded-full px-2.5 py-0.5 text-xs font-semibold ${phaseBadgeClass(item.phaseKind)}`}
+          className={`ml-auto rounded-full px-2.5 py-0.5 font-semibold ${large ? "text-sm" : "text-xs"} ${phaseBadgeClass(item.phaseKind)}`}
         >
           {item.phaseKind === "law" ? "★ " : ""}
           {item.phaseLabel}
         </span>
       </div>
-      <p className="mt-2 line-clamp-2 font-medium text-gray-900">{item.title}</p>
-      <div className="mt-3 flex items-center justify-between gap-4">
-        <span className="text-xs text-gray-400">{formatDate(item.date)}</span>
+      <p
+        className={`mt-2 font-medium text-gray-900 ${
+          large ? "line-clamp-3 text-xl font-semibold" : "line-clamp-2"
+        }`}
+      >
+        {item.title}
+      </p>
+      <div className="mt-auto flex items-center justify-between gap-4 pt-3">
+        <span className={large ? "text-sm text-gray-400" : "text-xs text-gray-400"}>
+          {formatDate(item.date)}
+        </span>
         <Tally yea={item.yea} nay={item.nay} />
       </div>
     </Link>
