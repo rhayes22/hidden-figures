@@ -3,7 +3,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
+import { BackLink } from "@/components/back-link";
 import { VoteRoster, type RosterMember } from "@/components/vote-roster";
+import { VoteStatusBadge } from "@/components/vote-status";
 import { formatDate, partyAbbrev, partyBreakdown } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -98,34 +100,52 @@ export default async function VotePage({ params }: Props) {
   const breakdown = partyBreakdown(roster);
   const total = { yea: 0, nay: 0, present: 0, not_voting: 0 };
   for (const m of roster) total[m.position as keyof typeof total] += 1;
-  const passed = /pass|agreed|confirm/i.test(rc.result);
   const decisive = total.yea + total.nay;
+  const billNumber = rc.bill_id
+    ? (() => {
+        const [type, num] = rc.bill_id.split("-");
+        return `${type.toUpperCase()} ${num}`;
+      })()
+    : null;
+  const fullTitle = rc.bill_title ?? rc.question;
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
-      <div className="flex items-center gap-2 text-sm">
+    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
+      <BackLink fallback="/bills" />
+
+      {/* Header */}
+      <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
         <span className="rounded-full bg-flag-blue-soft px-2.5 py-0.5 font-semibold uppercase tracking-wide text-flag-blue">
           {rc.chamber === "senate" ? "Senate" : "House"}
         </span>
+        {billNumber && (
+          <span className="rounded bg-gray-100 px-2 py-0.5 font-mono text-xs font-bold uppercase text-gray-700">
+            {billNumber}
+          </span>
+        )}
         <span className="text-gray-400">{formatDate(rc.vote_date)}</span>
       </div>
 
-      <h1 className="mt-3 text-2xl font-bold text-gray-900 sm:text-3xl">
-        {rc.bill_title ?? rc.question}
+      <h1
+        className="mt-3 line-clamp-2 text-2xl font-bold text-gray-900 sm:text-3xl"
+        title={fullTitle}
+      >
+        {fullTitle}
       </h1>
-      <p className="mt-1 text-gray-600">
-        {rc.question}
-        {" · "}
-        <span className={passed ? "text-green-700" : "text-flag-red"}>
-          {rc.result}
-        </span>
-      </p>
-      {rc.bill_id && (
-        <p className="mt-1 text-sm text-gray-500">Bill {rc.bill_id.toUpperCase()}</p>
+      {rc.bill_title && (
+        <p className="mt-1 text-gray-600">{rc.question}</p>
       )}
 
       {/* Scoreboard + party breakdown */}
       <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <VoteStatusBadge result={rc.result} />
+          {decisive > 0 && (
+            <span className="text-sm font-medium text-gray-500">
+              {total.yea}&ndash;{total.nay}
+            </span>
+          )}
+        </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Tile
             label="Yea"
@@ -238,11 +258,6 @@ export default async function VotePage({ params }: Props) {
         )}
       </section>
 
-      <p className="mt-10 text-sm">
-        <Link href="/" className="text-flag-blue hover:underline">
-          ← Back to recent votes
-        </Link>
-      </p>
     </div>
   );
 }

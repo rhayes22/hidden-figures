@@ -24,7 +24,7 @@ const POSITION_ORDER: Record<string, number> = {
   not_voting: 3,
 };
 
-const CAP = 50;
+const CAP = 10;
 
 export function VoteRoster({ members }: { members: RosterMember[] }) {
   const [party, setParty] = useState("all");

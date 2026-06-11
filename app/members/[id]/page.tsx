@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
+import { BackLink } from "@/components/back-link";
 import { legislators } from "@/db/schema";
 import {
   formatDate,
@@ -109,6 +110,9 @@ export default async function MemberPage({ params }: Props) {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
+      <div className="mb-4">
+        <BackLink fallback="/members" />
+      </div>
       <section className="rounded-2xl border border-gray-200 bg-flag-blue-soft/40 p-5 sm:p-6">
         <div className="flex flex-col gap-5 sm:flex-row">
           {member.photoUrl && (
