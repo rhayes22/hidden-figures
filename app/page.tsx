@@ -1,8 +1,14 @@
 import { sql } from "drizzle-orm";
 import Link from "next/link";
 import { SearchBar } from "@/components/search-bar";
+import { LegCard, type LegCardItem } from "@/components/leg-card";
 import { db } from "@/db";
-import { formatDate } from "@/lib/format";
+import {
+  CATEGORY_LABEL,
+  categoryForBillType,
+  categoryForQuestion,
+  votePhase,
+} from "@/lib/legislation";
 
 export const dynamic = "force-dynamic";
 
@@ -13,9 +19,33 @@ type RecentVote = {
   question: string;
   result: string;
   title: string | null;
+  bill_type: string | null;
+  bill_number: number | null;
   yea: number;
   nay: number;
 };
+
+function toCardItem(v: RecentVote): LegCardItem {
+  const phase = votePhase(v.result);
+  const category = v.bill_type
+    ? categoryForBillType(v.bill_type)
+    : categoryForQuestion(v.question);
+  const label = v.bill_type
+    ? `${v.bill_type.toUpperCase()} ${v.bill_number}`
+    : v.question.replace(/^On the |^On /i, "");
+  return {
+    href: `/votes/${v.id}`,
+    label,
+    category: CATEGORY_LABEL[category],
+    chamber: v.chamber as "house" | "senate",
+    phaseLabel: phase.label,
+    phaseKind: phase.kind,
+    title: v.title ?? v.question,
+    date: v.vote_date,
+    yea: v.yea,
+    nay: v.nay,
+  };
+}
 
 async function getStats() {
   const rows = await db.execute(sql`
@@ -39,60 +69,18 @@ async function getStats() {
 async function getRecentVotes(): Promise<RecentVote[]> {
   const rows = await db.execute(sql`
     SELECT rc.id, rc.chamber, rc.vote_date, rc.question, rc.result, b.title,
+      b.bill_type, b.number AS bill_number,
       count(*) FILTER (WHERE vp.position = 'yea')::int AS yea,
       count(*) FILTER (WHERE vp.position = 'nay')::int AS nay
     FROM roll_calls rc
     LEFT JOIN bills b ON b.id = rc.bill_id
     LEFT JOIN vote_positions vp ON vp.roll_call_id = rc.id
-    GROUP BY rc.id, rc.chamber, rc.vote_date, rc.question, rc.result, b.title
+    GROUP BY rc.id, rc.chamber, rc.vote_date, rc.question, rc.result, b.title,
+      b.bill_type, b.number
     ORDER BY rc.vote_date DESC, rc.roll_number DESC
     LIMIT 8
   `);
   return rows.rows as RecentVote[];
-}
-
-function ChamberBadge({ chamber }: { chamber: string }) {
-  return (
-    <span className="rounded-full bg-flag-blue-soft px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-flag-blue">
-      {chamber === "senate" ? "Senate" : "House"}
-    </span>
-  );
-}
-
-function ResultBadge({ result }: { result: string }) {
-  const passed = /pass|agreed|confirm/i.test(result);
-  return (
-    <span
-      className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-        passed ? "bg-green-50 text-green-800" : "bg-flag-red-soft text-flag-red"
-      }`}
-    >
-      {result}
-    </span>
-  );
-}
-
-function TallyBar({ yea, nay }: { yea: number; nay: number }) {
-  const total = yea + nay;
-  if (total === 0) return null;
-  return (
-    <div className="mt-3">
-      <div className="flex justify-between text-xs font-medium text-gray-600">
-        <span>{yea} yea</span>
-        <span>{nay} nay</span>
-      </div>
-      <div className="mt-1 flex h-1.5 overflow-hidden rounded-full bg-gray-100">
-        <div
-          className="bg-flag-blue"
-          style={{ width: `${(yea / total) * 100}%` }}
-        />
-        <div
-          className="bg-flag-red"
-          style={{ width: `${(nay / total) * 100}%` }}
-        />
-      </div>
-    </div>
-  );
 }
 
 export default async function HomePage() {
@@ -166,26 +154,7 @@ export default async function HomePage() {
           </div>
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             {recentVotes.map((vote) => (
-              <Link
-                key={vote.id}
-                href={`/votes/${vote.id}`}
-                className="rounded-xl border border-gray-200 bg-white p-5 transition-shadow hover:shadow-md"
-              >
-                <div className="flex items-center gap-2">
-                  <ChamberBadge chamber={vote.chamber} />
-                  <ResultBadge result={vote.result} />
-                  <span className="ml-auto text-xs text-gray-400">
-                    {formatDate(vote.vote_date)}
-                  </span>
-                </div>
-                <p className="mt-3 line-clamp-2 font-semibold text-gray-900">
-                  {vote.title ?? vote.question}
-                </p>
-                {vote.title && (
-                  <p className="mt-1 text-sm text-gray-500">{vote.question}</p>
-                )}
-                <TallyBar yea={vote.yea} nay={vote.nay} />
-              </Link>
+              <LegCard key={vote.id} item={toCardItem(vote)} />
             ))}
           </div>
         </section>
