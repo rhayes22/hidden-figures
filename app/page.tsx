@@ -1,7 +1,8 @@
 import { sql } from "drizzle-orm";
 import Link from "next/link";
 import { SearchBar } from "@/components/search-bar";
-import { LegCard, type LegCardItem } from "@/components/leg-card";
+import { type LegCardItem } from "@/components/leg-card";
+import { RecentVotesCarousel } from "@/components/recent-votes-carousel";
 import { db } from "@/db";
 import {
   CATEGORY_LABEL,
@@ -78,7 +79,7 @@ async function getRecentVotes(): Promise<RecentVote[]> {
     GROUP BY rc.id, rc.chamber, rc.vote_date, rc.question, rc.result, b.title,
       b.bill_type, b.number
     ORDER BY rc.vote_date DESC, rc.roll_number DESC
-    LIMIT 8
+    LIMIT 10
   `);
   return rows.rows as RecentVote[];
 }
@@ -152,10 +153,8 @@ export default async function HomePage() {
               From the official House and Senate records
             </span>
           </div>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            {recentVotes.map((vote) => (
-              <LegCard key={vote.id} item={toCardItem(vote)} />
-            ))}
+          <div className="mt-6">
+            <RecentVotesCarousel items={recentVotes.map(toCardItem)} />
           </div>
         </section>
 
