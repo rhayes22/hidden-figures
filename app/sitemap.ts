@@ -6,9 +6,8 @@ import { SITE_URL } from "@/lib/site";
 export const dynamic = "force-dynamic";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [members, bills, votes] = await Promise.all([
+  const [members, votes] = await Promise.all([
     db.execute(sql`SELECT id FROM legislators WHERE in_office`),
-    db.execute(sql`SELECT id FROM bills`),
     db.execute(
       sql`SELECT id FROM roll_calls ORDER BY vote_date DESC LIMIT 1000`,
     ),
@@ -26,16 +25,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     changeFrequency: "weekly" as const,
     priority: 0.7,
   }));
-  const billRoutes = bills.rows.map((r) => ({
-    url: `${SITE_URL}/bills/${(r as { id: string }).id}`,
-    changeFrequency: "monthly" as const,
-    priority: 0.6,
-  }));
   const voteRoutes = votes.rows.map((r) => ({
     url: `${SITE_URL}/votes/${(r as { id: string }).id}`,
     changeFrequency: "monthly" as const,
     priority: 0.6,
   }));
 
-  return [...staticRoutes, ...memberRoutes, ...billRoutes, ...voteRoutes];
+  return [...staticRoutes, ...memberRoutes, ...voteRoutes];
 }

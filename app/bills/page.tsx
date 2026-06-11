@@ -79,7 +79,8 @@ async function getItems(): Promise<LegItem[]> {
     const billType = latest.bill_type!;
     items.push({
       key: billId,
-      href: `/bills/${billId}`,
+      // Route straight to the bill's latest roll-call vote (no bill page).
+      href: `/votes/${latest.rc_id}`,
       category: categoryForBillType(billType),
       chambers: [...new Set(group.map((r) => r.chamber))],
       originChamber: billType.startsWith("h") ? "house" : "senate",

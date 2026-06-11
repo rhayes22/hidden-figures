@@ -40,6 +40,41 @@ async function getRoster(id: string): Promise<RosterMember[]> {
   return rows.rows as RosterMember[];
 }
 
+async function getOtherVotesOnBill(billId: string, currentId: string) {
+  const rows = await db.execute(sql`
+    SELECT rc.id, rc.chamber, rc.vote_date, rc.question, rc.result
+    FROM roll_calls rc
+    WHERE rc.bill_id = ${billId} AND rc.id <> ${currentId}
+    ORDER BY rc.vote_date DESC, rc.roll_number DESC
+  `);
+  return rows.rows as Array<{
+    id: string;
+    chamber: string;
+    vote_date: string;
+    question: string;
+    result: string;
+  }>;
+}
+
+function Tile({
+  label,
+  value,
+  className,
+}: {
+  label: string;
+  value: number;
+  className: string;
+}) {
+  return (
+    <div className={`rounded-xl px-4 py-3 text-center ${className}`}>
+      <div className="text-3xl font-bold tabular-nums">{value}</div>
+      <div className="text-xs font-semibold uppercase tracking-wide opacity-80">
+        {label}
+      </div>
+    </div>
+  );
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
   const rc = await getRollCall(id);
@@ -56,11 +91,15 @@ export default async function VotePage({ params }: Props) {
   const rc = await getRollCall(id);
   if (!rc) notFound();
 
-  const roster = await getRoster(id);
+  const [roster, others] = await Promise.all([
+    getRoster(id),
+    rc.bill_id ? getOtherVotesOnBill(rc.bill_id, id) : Promise.resolve([]),
+  ]);
   const breakdown = partyBreakdown(roster);
   const total = { yea: 0, nay: 0, present: 0, not_voting: 0 };
   for (const m of roster) total[m.position as keyof typeof total] += 1;
   const passed = /pass|agreed|confirm/i.test(rc.result);
+  const decisive = total.yea + total.nay;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
@@ -85,19 +124,43 @@ export default async function VotePage({ params }: Props) {
         <p className="mt-1 text-sm text-gray-500">Bill {rc.bill_id.toUpperCase()}</p>
       )}
 
-      {/* Tally + party breakdown */}
-      <section className="mt-6 rounded-xl border border-gray-200 bg-white p-5">
-        <div className="flex flex-wrap gap-x-8 gap-y-2 text-sm font-medium">
-          <span className="text-green-800">{total.yea} Yea</span>
-          <span className="text-flag-red">{total.nay} Nay</span>
-          {total.present > 0 && (
-            <span className="text-gray-600">{total.present} Present</span>
-          )}
-          {total.not_voting > 0 && (
-            <span className="text-gray-500">{total.not_voting} Not Voting</span>
-          )}
+      {/* Scoreboard + party breakdown */}
+      <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Tile
+            label="Yea"
+            value={total.yea}
+            className="bg-green-50 text-green-700"
+          />
+          <Tile
+            label="Nay"
+            value={total.nay}
+            className="bg-flag-red-soft text-flag-red"
+          />
+          <Tile
+            label="Present"
+            value={total.present}
+            className="bg-gray-50 text-gray-600"
+          />
+          <Tile
+            label="Not voting"
+            value={total.not_voting}
+            className="bg-gray-50 text-gray-500"
+          />
         </div>
-        <table className="mt-4 w-full text-sm">
+        {decisive > 0 && (
+          <div className="mt-4 flex h-2.5 overflow-hidden rounded-full bg-gray-100">
+            <div
+              className="bg-flag-blue"
+              style={{ width: `${(total.yea / decisive) * 100}%` }}
+            />
+            <div
+              className="bg-flag-red"
+              style={{ width: `${(total.nay / decisive) * 100}%` }}
+            />
+          </div>
+        )}
+        <table className="mt-5 w-full text-sm">
           <thead>
             <tr className="text-left text-xs uppercase tracking-wide text-gray-400">
               <th className="pb-1 font-semibold">Party</th>
@@ -126,6 +189,38 @@ export default async function VotePage({ params }: Props) {
           </tbody>
         </table>
       </section>
+
+      {/* Other roll calls on the same bill */}
+      {others.length > 0 && (
+        <section className="mt-8">
+          <h2 className="text-xl font-bold text-gray-900">
+            Other votes on this bill
+          </h2>
+          <ul className="mt-3 space-y-2">
+            {others.map((o) => (
+              <li key={o.id}>
+                <Link
+                  href={`/votes/${o.id}`}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 hover:bg-flag-blue-soft/50"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium text-gray-900">
+                      {o.question}
+                    </span>
+                    <span className="block text-xs text-gray-500">
+                      {o.chamber === "senate" ? "Senate" : "House"} ·{" "}
+                      {formatDate(o.vote_date)}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-sm font-medium text-gray-600">
+                    {o.result}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* Full roster */}
       <section className="mt-8">

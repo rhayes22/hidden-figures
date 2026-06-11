@@ -24,10 +24,13 @@ const POSITION_ORDER: Record<string, number> = {
   not_voting: 3,
 };
 
+const CAP = 50;
+
 export function VoteRoster({ members }: { members: RosterMember[] }) {
   const [party, setParty] = useState("all");
   const [state, setState] = useState("all");
   const [position, setPosition] = useState("all");
+  const [showAll, setShowAll] = useState(false);
 
   const states = useMemo(
     () => [...new Set(members.map((m) => m.state))].sort(),
@@ -52,6 +55,8 @@ export function VoteRoster({ members }: { members: RosterMember[] }) {
         ),
     [members, party, state, position],
   );
+
+  const visible = showAll ? filtered : filtered.slice(0, CAP);
 
   const selectClass =
     "rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-800";
@@ -103,7 +108,7 @@ export function VoteRoster({ members }: { members: RosterMember[] }) {
       </div>
 
       <ul className="mt-4 grid gap-x-6 gap-y-1 sm:grid-cols-2">
-        {filtered.map((m) => (
+        {visible.map((m) => (
           <li key={m.id}>
             <Link
               href={`/members/${m.id}`}
@@ -126,6 +131,17 @@ export function VoteRoster({ members }: { members: RosterMember[] }) {
           </li>
         ))}
       </ul>
+      {filtered.length > CAP && (
+        <button
+          type="button"
+          onClick={() => setShowAll((v) => !v)}
+          className="mt-4 rounded-full border border-gray-300 px-4 py-1.5 text-sm font-medium text-flag-blue hover:bg-flag-blue-soft"
+        >
+          {showAll
+            ? "Show fewer"
+            : `Show all ${filtered.length} members`}
+        </button>
+      )}
       {filtered.length === 0 && (
         <p className="mt-6 text-sm text-gray-500">
           No members match these filters.
