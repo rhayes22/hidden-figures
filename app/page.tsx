@@ -3,13 +3,18 @@ import Link from "next/link";
 import { SearchBar } from "@/components/search-bar";
 import { type LegCardItem } from "@/components/leg-card";
 import { RecentVotesCarousel } from "@/components/recent-votes-carousel";
+import {
+  ChamberBreakdown,
+  type Parties,
+  type Performance,
+} from "@/components/chamber-breakdown";
 import { db } from "@/db";
 import {
+  CATEGORIES,
   CATEGORY_LABEL,
   categoryForBillType,
   categoryForQuestion,
   votePhase,
-  type Category,
 } from "@/lib/legislation";
 
 export const dynamic = "force-dynamic";
@@ -85,20 +90,9 @@ async function getRecentVotes(): Promise<RecentVote[]> {
   return rows.rows as RecentVote[];
 }
 
-const CATS: Category[] = [
-  "bill",
-  "resolution",
-  "nomination",
-  "motion",
-  "amendment",
-];
-
-type CatStats = { votedOn: number; passed: number; failed: number };
-type Performance = Record<Category, CatStats>;
-
 function emptyPerformance(): Performance {
   return Object.fromEntries(
-    CATS.map((c) => [c, { votedOn: 0, passed: 0, failed: 0 }]),
+    CATEGORIES.map((c) => [c, { votedOn: 0, passed: 0, failed: 0 }]),
   ) as Performance;
 }
 
@@ -133,71 +127,36 @@ async function getPerformance(): Promise<{
   return out;
 }
 
-function PerformanceTable({
-  title,
-  data,
-}: {
-  title: string;
-  data: Performance;
-}) {
-  const totals = CATS.reduce(
-    (acc, c) => ({
-      votedOn: acc.votedOn + data[c].votedOn,
-      passed: acc.passed + data[c].passed,
-      failed: acc.failed + data[c].failed,
-    }),
-    { votedOn: 0, passed: 0, failed: 0 },
-  );
-  return (
-    <section className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
-      <h3 className="text-lg font-bold text-gray-900">{title}</h3>
-      <table className="mt-4 w-full text-sm">
-        <thead>
-          <tr className="text-xs uppercase tracking-wide text-gray-400">
-            <th className="pb-2 text-left font-semibold">Type</th>
-            <th className="pb-2 text-right font-semibold">Voted on</th>
-            <th className="pb-2 text-right font-semibold">Passed</th>
-            <th className="pb-2 text-right font-semibold">Failed</th>
-          </tr>
-        </thead>
-        <tbody>
-          {CATS.map((c) => (
-            <tr key={c} className="border-t border-gray-100">
-              <td className="py-2 font-medium text-gray-800">
-                {CATEGORY_LABEL[c]}s
-              </td>
-              <td className="py-2 text-right tabular-nums text-gray-700">
-                {data[c].votedOn}
-              </td>
-              <td className="py-2 text-right tabular-nums font-medium text-green-700">
-                {data[c].passed}
-              </td>
-              <td className="py-2 text-right tabular-nums font-medium text-flag-red">
-                {data[c].failed}
-              </td>
-            </tr>
-          ))}
-          <tr className="border-t-2 border-gray-200 font-bold text-gray-900">
-            <td className="py-2">Total</td>
-            <td className="py-2 text-right tabular-nums">{totals.votedOn}</td>
-            <td className="py-2 text-right tabular-nums text-green-700">
-              {totals.passed}
-            </td>
-            <td className="py-2 text-right tabular-nums text-flag-red">
-              {totals.failed}
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
-  );
+// In-office party split (D/R/I) per chamber.
+async function getChamberStats(): Promise<{ house: Parties; senate: Parties }> {
+  const res = await db.execute(sql`
+    SELECT chamber,
+      count(*) FILTER (WHERE party = 'Democrat')::int AS d,
+      count(*) FILTER (WHERE party = 'Republican')::int AS r,
+      count(*) FILTER (WHERE party NOT IN ('Democrat', 'Republican'))::int AS i,
+      count(*)::int AS total
+    FROM legislators WHERE in_office GROUP BY chamber
+  `);
+  const rows = res.rows as Array<{
+    chamber: string;
+    d: number;
+    r: number;
+    i: number;
+    total: number;
+  }>;
+  const pick = (c: string): Parties => {
+    const row = rows.find((x) => x.chamber === c);
+    return { d: row?.d ?? 0, r: row?.r ?? 0, i: row?.i ?? 0, total: row?.total ?? 0 };
+  };
+  return { house: pick("house"), senate: pick("senate") };
 }
 
 export default async function HomePage() {
-  const [stats, recentVotes, performance] = await Promise.all([
+  const [stats, recentVotes, performance, chamberStats] = await Promise.all([
     getStats(),
     getRecentVotes(),
     getPerformance(),
+    getChamberStats(),
   ]);
   const inOffice = stats.senators + stats.representatives;
 
@@ -266,13 +225,16 @@ export default async function HomePage() {
           <p className="mt-1 text-sm text-gray-500">
             Roll-call votes this Congress, by type and outcome.
           </p>
-          <div className="mt-6 grid gap-6 lg:grid-cols-2">
-            <PerformanceTable
-              title="House of Representatives"
-              data={performance.house}
-            />
-            <PerformanceTable title="Senate" data={performance.senate} />
-          </div>
+          <ChamberBreakdown
+            house={{
+              parties: chamberStats.house,
+              performance: performance.house,
+            }}
+            senate={{
+              parties: chamberStats.senate,
+              performance: performance.senate,
+            }}
+          />
         </section>
 
         {/* Recent votes */}

@@ -7,6 +7,14 @@ export type Category =
   | "motion"
   | "amendment";
 
+export const CATEGORIES: Category[] = [
+  "bill",
+  "resolution",
+  "nomination",
+  "motion",
+  "amendment",
+];
+
 export const CATEGORY_LABEL: Record<Category, string> = {
   bill: "Bill",
   resolution: "Resolution",
