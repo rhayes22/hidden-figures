@@ -20,8 +20,11 @@ import {
   type ParsedRollCall,
 } from "../lib/votes";
 
+// Usage: npm run sync:votes [-- <votesPerChamber> [<year>]]
+//   npm run sync:votes               # latest 30 per chamber, current year
+//   npm run sync:votes -- 1200 2025  # backfill a whole prior session
 const VOTES_PER_CHAMBER = Number(process.argv[2] ?? 30);
-const YEAR = new Date().getFullYear();
+const YEAR = Number(process.argv[3] ?? new Date().getFullYear());
 const CONGRESS = congressForYear(YEAR);
 const SESSION = sessionForYear(YEAR);
 const LEGISLATORS_YAML =
@@ -60,6 +63,37 @@ async function findLatestHouseRoll(): Promise<number> {
   return lo;
 }
 
+// Fetch + parse a list of vote URLs in polite parallel batches. senate.gov
+// rate-limits aggressive clients (403s), so keep batches small, pause between
+// them, and report failures loudly — a silent gap is worse than a slow sync.
+async function fetchVotesBatched(
+  urls: string[],
+  parse: (xml: string) => ParsedRollCall,
+): Promise<ParsedRollCall[]> {
+  const BATCH = 5;
+  const PAUSE_MS = 400;
+  const out: ParsedRollCall[] = [];
+  let failed = 0;
+  for (let i = 0; i < urls.length; i += BATCH) {
+    const texts = await Promise.all(
+      urls.slice(i, i + BATCH).map((u) => fetchText(u)),
+    );
+    for (const xml of texts) {
+      if (xml) out.push(parse(xml));
+      else failed += 1;
+    }
+    if (i + BATCH < urls.length) {
+      await new Promise((r) => setTimeout(r, PAUSE_MS));
+    }
+  }
+  if (failed > 0) {
+    console.warn(
+      `⚠ ${failed} of ${urls.length} vote fetches failed (likely rate-limited) — re-run later to fill the gap`,
+    );
+  }
+  return out;
+}
+
 async function fetchHouseVotes(): Promise<ParsedRollCall[]> {
   if (!(await houseRollExists(1))) {
     console.warn(`No House votes found for ${YEAR}`);
@@ -67,12 +101,11 @@ async function fetchHouseVotes(): Promise<ParsedRollCall[]> {
   }
   const latest = await findLatestHouseRoll();
   console.log(`House: latest roll call is #${latest}`);
-  const rolls = [];
+  const urls = [];
   for (let r = latest; r > Math.max(0, latest - VOTES_PER_CHAMBER); r--) {
-    const xml = await fetchText(houseUrl(r));
-    if (xml) rolls.push(parseHouseVote(xml));
+    urls.push(houseUrl(r));
   }
-  return rolls;
+  return fetchVotesBatched(urls, parseHouseVote);
 }
 
 // --- Senate: the menu lists every vote of the session ---
@@ -89,14 +122,11 @@ async function fetchSenateVotes(): Promise<ParsedRollCall[]> {
     .sort((a, b) => b - a)
     .slice(0, VOTES_PER_CHAMBER);
   console.log(`Senate: latest roll call is #${numbers[0] ?? "none"}`);
-  const votes = [];
-  for (const n of numbers) {
-    const xml = await fetchText(
+  const urls = numbers.map(
+    (n) =>
       `https://www.senate.gov/legislative/LIS/roll_call_votes/vote${CONGRESS}${SESSION}/vote_${CONGRESS}_${SESSION}_${String(n).padStart(5, "0")}.xml`,
-    );
-    if (xml) votes.push(parseSenateVote(xml));
-  }
-  return votes;
+  );
+  return fetchVotesBatched(urls, parseSenateVote);
 }
 
 // --- Senate LIS id -> bioguide id crosswalk ---
