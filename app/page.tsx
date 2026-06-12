@@ -181,10 +181,10 @@ export default async function HomePage() {
       </section>
 
       <div className="mx-auto max-w-6xl space-y-12 px-4 py-12 sm:px-6">
-        {/* The 119th Congress */}
+        {/* Meet the 119th Congress */}
         <section>
           <h2 className="text-2xl font-bold text-gray-900">
-            The 119th Congress
+            Meet the 119th Congress
           </h2>
           <div className="mt-6 grid grid-cols-2 gap-6 text-center sm:grid-cols-4">
             <div>
@@ -213,6 +213,46 @@ export default async function HomePage() {
                 )}
               </p>
               <p className="text-sm text-gray-500">Party split</p>
+            </div>
+          </div>
+
+          {/* Meet the members — by party */}
+          <div className="mt-8">
+            <h3 className="text-lg font-bold text-gray-900">Meet the members</h3>
+            <div className="mt-3 grid gap-4 sm:grid-cols-3">
+              <Link
+                href="/members/party/republican"
+                className="rounded-xl border border-gray-200 bg-white p-5 transition-shadow hover:shadow-md"
+              >
+                <p className="text-3xl font-bold text-flag-red">
+                  {stats.republicans}
+                </p>
+                <p className="mt-1 font-semibold text-gray-900">
+                  Republicans &rarr;
+                </p>
+              </Link>
+              <Link
+                href="/members/party/democrat"
+                className="rounded-xl border border-gray-200 bg-white p-5 transition-shadow hover:shadow-md"
+              >
+                <p className="text-3xl font-bold text-flag-blue">
+                  {stats.democrats}
+                </p>
+                <p className="mt-1 font-semibold text-gray-900">
+                  Democrats &rarr;
+                </p>
+              </Link>
+              <Link
+                href="/members/party/independent"
+                className="rounded-xl border border-gray-200 bg-white p-5 transition-shadow hover:shadow-md"
+              >
+                <p className="text-3xl font-bold text-gray-600">
+                  {stats.independents}
+                </p>
+                <p className="mt-1 font-semibold text-gray-900">
+                  Independents &rarr;
+                </p>
+              </Link>
             </div>
           </div>
         </section>
@@ -251,7 +291,7 @@ export default async function HomePage() {
         </section>
 
         {/* Upcoming votes + quick links */}
-        <section className="grid gap-4 lg:grid-cols-3">
+        <section className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-xl border border-dashed border-gray-300 bg-flag-blue-soft/50 p-6">
             <h3 className="font-bold text-gray-900">Upcoming votes</h3>
             <p className="mt-2 text-sm text-gray-600">
@@ -281,16 +321,6 @@ export default async function HomePage() {
               </li>
             </ul>
           </div>
-          <Link
-            href="/members"
-            className="rounded-xl border border-gray-200 bg-white p-6 transition-shadow hover:shadow-md"
-          >
-            <h3 className="font-bold text-flag-blue">Browse all members →</h3>
-            <p className="mt-2 text-sm text-gray-600">
-              Every senator and representative, by state — with their voting
-              record.
-            </p>
-          </Link>
           <Link
             href="/bills"
             className="rounded-xl border border-gray-200 bg-white p-6 transition-shadow hover:shadow-md"
