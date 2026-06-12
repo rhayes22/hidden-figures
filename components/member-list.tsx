@@ -1,8 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { MemberAvatar } from "@/components/member-avatar";
 import {
   partyAbbrev,
   partyBadgeClass,
@@ -84,17 +84,13 @@ export function MemberList({ members }: { members: MemberRow[] }) {
               href={`/members/${m.id}`}
               className="flex items-center gap-4 px-4 py-3 hover:bg-flag-blue-soft/50"
             >
-              {m.photoUrl ? (
-                <Image
-                  src={m.photoUrl}
-                  alt=""
-                  width={40}
-                  height={49}
-                  className="h-12 w-10 shrink-0 rounded bg-gray-100 object-cover"
-                />
-              ) : (
-                <span className="h-12 w-10 shrink-0 rounded bg-gray-100" />
-              )}
+              <MemberAvatar
+                src={m.photoUrl}
+                name={m.fullName}
+                width={40}
+                height={49}
+                className="h-12 w-10 shrink-0 rounded bg-gray-100 object-cover text-sm"
+              />
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-semibold text-gray-900">
                   {m.fullName}

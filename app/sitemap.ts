@@ -8,8 +8,9 @@ export const dynamic = "force-dynamic";
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [members, votes] = await Promise.all([
     db.execute(sql`SELECT id FROM legislators WHERE in_office`),
+    // Sitemaps allow up to 50,000 URLs per file; cap well under that.
     db.execute(
-      sql`SELECT id FROM roll_calls ORDER BY vote_date DESC LIMIT 1000`,
+      sql`SELECT id FROM roll_calls ORDER BY vote_date DESC LIMIT 45000`,
     ),
   ]);
 

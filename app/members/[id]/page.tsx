@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { BackLink } from "@/components/back-link";
+import { MemberAvatar } from "@/components/member-avatar";
 import { legislators } from "@/db/schema";
 import {
   formatDate,
@@ -115,16 +115,14 @@ export default async function MemberPage({ params }: Props) {
       </div>
       <section className="rounded-2xl border border-gray-200 bg-flag-blue-soft/40 p-5 sm:p-6">
         <div className="flex flex-col gap-5 sm:flex-row">
-          {member.photoUrl && (
-            <Image
-              src={member.photoUrl}
-              alt={`Official portrait of ${member.fullName}`}
-              width={120}
-              height={146}
-              priority
-              className="h-[146px] w-[120px] shrink-0 rounded-xl border border-gray-200 bg-gray-100 object-cover"
-            />
-          )}
+          <MemberAvatar
+            src={member.photoUrl}
+            name={member.fullName}
+            width={120}
+            height={146}
+            priority
+            className="h-[146px] w-[120px] shrink-0 rounded-xl border border-gray-200 bg-gray-100 object-cover text-3xl"
+          />
           <div className="flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">
@@ -173,6 +171,9 @@ export default async function MemberPage({ params }: Props) {
                   </span>
                 </>
               )}
+            </p>
+            <p className="mt-1 text-xs text-gray-400">
+              Vote totals reflect roll calls tracked since January 2026.
             </p>
           </div>
         </div>
