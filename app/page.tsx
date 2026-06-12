@@ -186,7 +186,7 @@ export default async function HomePage() {
           <h2 className="text-2xl font-bold text-gray-900">
             Meet the 119th Congress
           </h2>
-          <div className="mt-6 grid grid-cols-2 gap-6 text-center sm:grid-cols-4">
+          <div className="mt-6 grid grid-cols-3 gap-6 text-center">
             <div>
               <p className="text-3xl font-bold text-flag-blue">{inOffice}</p>
               <p className="text-sm text-gray-500">Members in office</p>
@@ -203,17 +203,6 @@ export default async function HomePage() {
               </p>
               <p className="text-sm text-gray-500">Representatives</p>
             </div>
-            <div>
-              <p className="text-3xl font-bold">
-                <span className="text-flag-blue">{stats.democrats}D</span>
-                <span className="text-gray-300"> / </span>
-                <span className="text-flag-red">{stats.republicans}R</span>
-                {stats.independents > 0 && (
-                  <span className="text-gray-500"> / {stats.independents}I</span>
-                )}
-              </p>
-              <p className="text-sm text-gray-500">Party split</p>
-            </div>
           </div>
 
           {/* Meet the members — by party */}
@@ -222,36 +211,36 @@ export default async function HomePage() {
             <div className="mt-3 grid gap-4 sm:grid-cols-3">
               <Link
                 href="/members/party/republican"
-                className="rounded-xl border border-gray-200 bg-white p-5 transition-shadow hover:shadow-md"
+                className="flex items-center justify-between gap-3 rounded-xl bg-flag-red px-6 py-6 text-white shadow-sm ring-1 ring-black/10 transition hover:brightness-110"
               >
-                <p className="text-3xl font-bold text-flag-red">
+                <span className="text-xl font-bold [text-shadow:0_1px_2px_rgba(0,0,0,0.35)] sm:text-2xl">
+                  Republicans
+                </span>
+                <span className="text-4xl font-extrabold tabular-nums [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">
                   {stats.republicans}
-                </p>
-                <p className="mt-1 font-semibold text-gray-900">
-                  Republicans &rarr;
-                </p>
+                </span>
               </Link>
               <Link
                 href="/members/party/democrat"
-                className="rounded-xl border border-gray-200 bg-white p-5 transition-shadow hover:shadow-md"
+                className="flex items-center justify-between gap-3 rounded-xl bg-flag-blue px-6 py-6 text-white shadow-sm ring-1 ring-black/10 transition hover:brightness-110"
               >
-                <p className="text-3xl font-bold text-flag-blue">
+                <span className="text-xl font-bold [text-shadow:0_1px_2px_rgba(0,0,0,0.35)] sm:text-2xl">
+                  Democrats
+                </span>
+                <span className="text-4xl font-extrabold tabular-nums [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">
                   {stats.democrats}
-                </p>
-                <p className="mt-1 font-semibold text-gray-900">
-                  Democrats &rarr;
-                </p>
+                </span>
               </Link>
               <Link
                 href="/members/party/independent"
-                className="rounded-xl border border-gray-200 bg-white p-5 transition-shadow hover:shadow-md"
+                className="flex items-center justify-between gap-3 rounded-xl bg-gray-600 px-6 py-6 text-white shadow-sm ring-1 ring-black/10 transition hover:brightness-110"
               >
-                <p className="text-3xl font-bold text-gray-600">
+                <span className="text-xl font-bold [text-shadow:0_1px_2px_rgba(0,0,0,0.35)] sm:text-2xl">
+                  Independents
+                </span>
+                <span className="text-4xl font-extrabold tabular-nums [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">
                   {stats.independents}
-                </p>
-                <p className="mt-1 font-semibold text-gray-900">
-                  Independents &rarr;
-                </p>
+                </span>
               </Link>
             </div>
           </div>
