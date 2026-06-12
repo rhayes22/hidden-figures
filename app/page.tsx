@@ -1,8 +1,10 @@
 import { sql } from "drizzle-orm";
 import Link from "next/link";
+import { MemberAvatar } from "@/components/member-avatar";
 import { SearchBar } from "@/components/search-bar";
 import { type LegCardItem } from "@/components/leg-card";
 import { RecentVotesCarousel } from "@/components/recent-votes-carousel";
+import { partyAbbrev } from "@/lib/format";
 import {
   ChamberBreakdown,
   type Parties,
@@ -151,13 +153,38 @@ async function getChamberStats(): Promise<{ house: Parties; senate: Parties }> {
   return { house: pick("house"), senate: pick("senate") };
 }
 
+type DeanRow = {
+  id: string;
+  full_name: string;
+  party: string;
+  state: string;
+  district: string | null;
+  chamber: string;
+  photo_url: string | null;
+  member_since: string;
+};
+
+// The "deans" of Congress — longest continuous-or-not tenure by first term.
+async function getLongestServing(): Promise<DeanRow[]> {
+  const res = await db.execute(sql`
+    SELECT id, full_name, party, state, district, chamber, photo_url, member_since
+    FROM legislators
+    WHERE in_office AND member_since IS NOT NULL
+    ORDER BY member_since ASC
+    LIMIT 5
+  `);
+  return res.rows as DeanRow[];
+}
+
 export default async function HomePage() {
-  const [stats, recentVotes, performance, chamberStats] = await Promise.all([
-    getStats(),
-    getRecentVotes(),
-    getPerformance(),
-    getChamberStats(),
-  ]);
+  const [stats, recentVotes, performance, chamberStats, deans] =
+    await Promise.all([
+      getStats(),
+      getRecentVotes(),
+      getPerformance(),
+      getChamberStats(),
+      getLongestServing(),
+    ]);
   const inOffice = stats.senators + stats.representatives;
 
   return (
@@ -247,6 +274,50 @@ export default async function HomePage() {
               </Link>
             </div>
           </div>
+        </section>
+
+        {/* Longest-serving members */}
+        <section>
+          <h2 className="text-2xl font-bold text-gray-900">
+            Longest-serving members
+          </h2>
+          <p className="mt-1 text-sm text-gray-500">
+            The deans of Congress, by the year they were first sworn in.
+          </p>
+          <ol className="mt-4 divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white">
+            {deans.map((m, i) => (
+              <li key={m.id}>
+                <Link
+                  href={`/members/${m.id}`}
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-flag-blue-soft/50"
+                >
+                  <span className="w-5 shrink-0 text-center text-sm font-bold text-gray-400">
+                    {i + 1}
+                  </span>
+                  <MemberAvatar
+                    src={m.photo_url}
+                    name={m.full_name}
+                    width={36}
+                    height={44}
+                    className="h-11 w-9 shrink-0 rounded bg-gray-100 object-cover text-xs"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold text-gray-900">
+                      {m.full_name}
+                    </span>
+                    <span className="block text-xs text-gray-500">
+                      {partyAbbrev(m.party)} ·{" "}
+                      {m.chamber === "senate" ? "Senator" : "Representative"} ·{" "}
+                      {m.state}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-sm font-medium text-flag-blue">
+                    Since {m.member_since.slice(0, 4)}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ol>
         </section>
 
         {/* Voting record by chamber */}

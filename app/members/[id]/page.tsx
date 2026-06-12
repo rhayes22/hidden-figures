@@ -45,6 +45,36 @@ async function getVoteStats(id: string) {
   };
 }
 
+// How often the member votes with their own party's majority (loyalty).
+// Only meaningful for D/R; returns null for independents / no data.
+async function getPartyLoyalty(
+  id: string,
+  party: string,
+): Promise<number | null> {
+  if (party !== "Democrat" && party !== "Republican") return null;
+  const rows = await db.execute(sql`
+    WITH maj AS (
+      SELECT vp.roll_call_id,
+        CASE WHEN count(*) FILTER (WHERE vp.position = 'yea')
+                  >= count(*) FILTER (WHERE vp.position = 'nay')
+             THEN 'yea' ELSE 'nay' END AS pos
+      FROM vote_positions vp
+      JOIN legislators l ON l.id = vp.legislator_id
+      WHERE vp.position IN ('yea', 'nay') AND l.party = ${party}
+      GROUP BY vp.roll_call_id
+    )
+    SELECT
+      count(*) FILTER (WHERE vp.position::text = maj.pos)::int AS with_party,
+      count(*)::int AS decisive
+    FROM vote_positions vp
+    JOIN maj ON maj.roll_call_id = vp.roll_call_id
+    WHERE vp.legislator_id = ${id} AND vp.position IN ('yea', 'nay')
+  `);
+  const r = rows.rows[0] as { with_party: number; decisive: number };
+  if (!r || r.decisive === 0) return null;
+  return Math.round((r.with_party / r.decisive) * 100);
+}
+
 async function getRecentPositions(id: string) {
   const rows = await db.execute(sql`
     SELECT rc.id, rc.chamber, rc.vote_date, rc.question, rc.result,
@@ -103,9 +133,10 @@ export default async function MemberPage({ params }: Props) {
   const member = await getMember(id);
   if (!member) notFound();
 
-  const [stats, positions] = await Promise.all([
+  const [stats, positions, partyLoyalty] = await Promise.all([
     getVoteStats(id),
     getRecentPositions(id),
+    getPartyLoyalty(id, member.party),
   ]);
 
   return (
@@ -143,7 +174,11 @@ export default async function MemberPage({ params }: Props) {
               {seatLabel(member)} — {STATE_NAMES[member.state] ?? member.state}
             </p>
 
-            <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-gray-200/70 pt-4 sm:grid-cols-4">
+            <dl
+              className={`mt-5 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-gray-200/70 pt-4 ${
+                partyLoyalty != null ? "sm:grid-cols-5" : "sm:grid-cols-4"
+              }`}
+            >
               {member.memberSince && (
                 <Stat
                   label="In office since"
@@ -157,6 +192,9 @@ export default async function MemberPage({ params }: Props) {
                 <Stat label="Bills cosponsored" value={member.billsCosponsored} />
               )}
               <Stat label="Recorded votes" value={stats.total} />
+              {partyLoyalty != null && (
+                <Stat label="Votes with party" value={`${partyLoyalty}%`} />
+              )}
             </dl>
             <p className="mt-3 text-xs text-gray-500">
               On recorded votes:{" "}
