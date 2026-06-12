@@ -114,47 +114,61 @@ async function lisToBioguide(): Promise<Map<string, string>> {
 
 // --- Bills: create rows with real titles from Congress.gov ---
 
-async function upsertBills(billIds: string[]): Promise<void> {
-  const apiKey = process.env.CONGRESS_GOV_API_KEY;
-  if (!apiKey) throw new Error("CONGRESS_GOV_API_KEY is not set");
+type BillRow = typeof bills.$inferInsert;
 
-  for (const id of billIds) {
-    const { billType, number, congress } = parseBillId(id);
-    const res = await fetch(
-      `https://api.congress.gov/v3/bill/${congress}/${billType}/${number}?format=json&api_key=${apiKey}`,
-    );
-    const detail = res.ok
-      ? ((await res.json()) as {
+async function fetchBillRow(id: string, apiKey: string): Promise<BillRow> {
+  const { billType, number, congress } = parseBillId(id);
+  const res = await fetch(
+    `https://api.congress.gov/v3/bill/${congress}/${billType}/${number}?format=json&api_key=${apiKey}`,
+  );
+  const bill = res.ok
+    ? (
+        (await res.json()) as {
           bill?: {
             title?: string;
             latestAction?: { actionDate?: string; text?: string };
           };
-        })
-      : null;
-    const bill = detail?.bill;
-    if (!res.ok) {
-      console.warn(`Congress.gov ${res.status} for ${id}; inserting placeholder title`);
-    }
-    await db
-      .insert(bills)
-      .values({
-        id,
-        congress,
-        billType,
-        number,
-        title: bill?.title ?? `${billType.toUpperCase()} ${number}`,
-        status: bill?.latestAction?.text ?? null,
-        latestActionDate: bill?.latestAction?.actionDate ?? null,
-      })
-      .onConflictDoUpdate({
-        target: bills.id,
-        set: {
-          title: sql`excluded.title`,
-          status: sql`excluded.status`,
-          latestActionDate: sql`excluded.latest_action_date`,
-        },
-      });
+        }
+      ).bill
+    : null;
+  if (!res.ok) {
+    console.warn(`Congress.gov ${res.status} for ${id}; using placeholder title`);
   }
+  return {
+    id,
+    congress,
+    billType,
+    number,
+    title: bill?.title ?? `${billType.toUpperCase()} ${number}`,
+    status: bill?.latestAction?.text ?? null,
+    latestActionDate: bill?.latestAction?.actionDate ?? null,
+  };
+}
+
+async function upsertBills(billIds: string[]): Promise<void> {
+  const apiKey = process.env.CONGRESS_GOV_API_KEY;
+  if (!apiKey) throw new Error("CONGRESS_GOV_API_KEY is not set");
+  if (billIds.length === 0) return;
+
+  // Fetch titles in parallel batches (rate limit is 5,000/hr), then one upsert.
+  const BATCH = 12;
+  const rows: BillRow[] = [];
+  for (let i = 0; i < billIds.length; i += BATCH) {
+    const batch = billIds.slice(i, i + BATCH);
+    rows.push(...(await Promise.all(batch.map((id) => fetchBillRow(id, apiKey)))));
+  }
+
+  await db
+    .insert(bills)
+    .values(rows)
+    .onConflictDoUpdate({
+      target: bills.id,
+      set: {
+        title: sql`excluded.title`,
+        status: sql`excluded.status`,
+        latestActionDate: sql`excluded.latest_action_date`,
+      },
+    });
 }
 
 // --- Main ---
