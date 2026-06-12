@@ -96,17 +96,17 @@ export function ChamberBreakdown({
   const active = tab === "house" ? house : senate;
   return (
     <div className="mt-6">
-      <div className="flex flex-wrap gap-1 border-b border-gray-200">
+      <div className="grid grid-cols-2 gap-1 rounded-xl border border-gray-200 bg-gray-100 p-1">
         {TABS.map((t) => (
           <button
             key={t.value}
             type="button"
             onClick={() => setTab(t.value)}
             aria-current={tab === t.value}
-            className={`-mb-px border-b-2 px-4 py-2 text-sm font-semibold transition-colors ${
+            className={`rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors ${
               tab === t.value
-                ? "border-flag-red text-flag-blue"
-                : "border-transparent text-gray-500 hover:text-gray-800"
+                ? "bg-white text-flag-blue shadow-sm"
+                : "text-gray-500 hover:text-gray-800"
             }`}
           >
             {t.label}
