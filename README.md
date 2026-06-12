@@ -2,7 +2,7 @@
 
 How did your representatives actually vote? Search any member of the U.S. Congress and see their recent votes, or search any bill and see the full yea/nay roster.
 
-**Status:** Phase 1 — data pipeline. Full plan and task board live in [Notion](https://app.notion.com/p/37b6bd6e00b7814ebaf2fdf800c94081).
+**Status:** Federal MVP feature-complete and deployed. The full project brief, current state, conventions, and backlog live in **[docs/PROJECT.md](docs/PROJECT.md)** — start there.
 
 ## MVP scope
 
