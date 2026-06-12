@@ -123,8 +123,9 @@ roll-call positions — votes come from the chamber XML feeds, not the API.
 **Ingestion scripts** (run against `DATABASE_URL`; idempotent upserts):
 - `npm run sync:members` — roster from congress-legislators + sponsorship counts from
   Congress.gov. Marks departed members `in_office = false` (keeps their votes).
-- `npm run sync:votes [n]` — latest `n` roll calls per chamber (default 30); creates
-  bill rows with real Congress.gov titles; crosswalks Senate LIS→bioguide.
+- `npm run sync:votes [n] [year]` — latest `n` roll calls per chamber (default 30,
+  current year); pass a year to backfill a prior session (e.g. `-- 1500 2025`).
+  Creates bill rows with real Congress.gov titles; crosswalks Senate LIS→bioguide.
 - `npm run sync:all` — members then votes.
 
 **Nightly cron:** `.github/workflows/sync.yml`. ⚠️ **The schedule is currently PAUSED**
@@ -132,9 +133,10 @@ roll-call positions — votes come from the chamber XML feeds, not the API.
 iteration). Re-enable by uncommenting two lines. Manual runs still work via the
 Actions tab (`workflow_dispatch`, with a custom roll-calls-per-chamber count).
 
-**Current data:** the **119th Congress, session 2 (2026)** is ingested — ~382 roll
-calls, ~109k vote positions, 164 bills, 530 in-office members. The **2025 (session 1)
-backfill has NOT been done** — so vote history currently starts Jan 2026.
+**Current data:** the **full 119th Congress** is ingested (backfilled 2026-06-12) —
+1,414 roll calls (584 House + 830 Senate, Jan 2025 → present), ~331k vote positions,
+441 bills, 530 in-office members. DB size ≈ 65 MB (~13% of Neon's 500 MB free tier);
+full-Congress data fits the free tier comfortably.
 
 ## 8. Conventions & workflow
 
@@ -166,23 +168,23 @@ npm run dev        # http://localhost:3000  (uses the hosted Neon DB)
 
 - **Kevin Kiley (CA)** is listed as Independent — that's the source data
   (`congress-legislators`), not a mistake.
-- **~3 Senate members'** LIS ids aren't in the crosswalk yet, so a few of their
-  positions are skipped on ingest. To reconcile on the next data pass.
+- **~3,300 vote positions are skipped** on ingest: they belong to members who left
+  office during the 119th (departed/replaced) and are no longer in
+  `legislators-current`. Fixable later via `legislators-historical.yaml`.
 - **Some new members** have no upstream portrait → the UI shows an initials avatar.
-- **"Recorded votes" counts** reflect only ingested data (since Jan 2026), so members
-  elected in 2025 won't show a full history until the backfill (see §11).
+- **senate.gov rate-limits** aggressive fetching (403s). The sync fetches in small
+  batches with pauses and warns loudly on failures; if a backfill reports failures,
+  wait ~5–10 minutes and re-run (idempotent).
 
 ## 11. Backlog / what's next
 
 **High-value next steps**
-1. **2025 (session 1) backfill** — completes "every roll call of the 119th." This is also
-   the right moment to (a) enrich nominations with nominee names, and (b) reconcile the
-   unmatched Senate LIS ids.
-2. **Re-enable the nightly cron** once iteration settles (uncomment the schedule in
+1. **Re-enable the nightly cron** once iteration settles (uncomment the schedule in
    `sync.yml`).
-3. **Full bill catalog** — ingest all bills (not just voted ones) + summaries for richer
-   bill pages.
-4. **Codify ingestion validation/alerting** into the sync job.
+2. **Full bill catalog** — ingest all bills (not just voted ones) + summaries for richer
+   bill pages. Also the moment to enrich nominations with nominee names and ingest
+   departed members from `legislators-historical.yaml` (recovers the skipped positions).
+3. **Codify ingestion validation/alerting** into the sync job.
 
 **Saved-for-later feature ideas** (all computable from existing data)
 - "Closest votes" section (ties & cliffhangers — e.g. a 209–209 House tie).

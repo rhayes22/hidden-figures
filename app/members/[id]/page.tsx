@@ -217,7 +217,8 @@ export default async function MemberPage({ params }: Props) {
               )}
             </p>
             <p className="mt-1 text-xs text-gray-400">
-              Vote totals reflect roll calls tracked since January 2026.
+              Vote totals cover the full 119th Congress (January 2025 to
+              today).
             </p>
           </div>
         </div>
