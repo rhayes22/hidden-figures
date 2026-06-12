@@ -15,7 +15,13 @@ import {
   STATE_NAMES,
 } from "@/lib/format";
 
-export const dynamic = "force-dynamic";
+// Cache rendered pages with ISR; data changes at most daily (nightly sync).
+// Empty generateStaticParams opts the route into on-demand ISR (nothing is
+// prerendered at build; pages render + cache on first request).
+export const revalidate = 3600;
+export async function generateStaticParams() {
+  return [];
+}
 
 type Props = { params: Promise<{ id: string }> };
 
