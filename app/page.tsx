@@ -163,7 +163,7 @@ export default async function HomePage() {
   return (
     <>
       {/* Hero — fills the screen on load */}
-      <section className="flex min-h-screen flex-col items-center justify-center bg-flag-blue bg-gradient-to-b from-flag-blue to-flag-blue-deep px-4 py-16 text-center text-white">
+      <section className="relative flex min-h-screen flex-col items-center justify-center bg-flag-blue bg-gradient-to-b from-flag-blue to-flag-blue-deep px-4 py-16 text-center text-white">
         <h1 className="mx-auto max-w-3xl text-4xl font-bold tracking-tight sm:text-5xl">
           How did your representatives{" "}
           <span className="text-red-300">actually</span> vote?
@@ -178,6 +178,9 @@ export default async function HomePage() {
         <p className="mt-4 text-sm text-blue-300">
           Try a name like &ldquo;Jordan&rdquo;, or a state like &ldquo;OH&rdquo;
         </p>
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce text-xs font-medium uppercase tracking-widest text-blue-200">
+          ↓ Explore
+        </div>
       </section>
 
       <div className="mx-auto max-w-6xl space-y-12 px-4 py-12 sm:px-6">

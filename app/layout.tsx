@@ -85,12 +85,87 @@ export default function RootLayout({
         </header>
         <main className="flex-1">{children}</main>
         <footer className="border-t border-gray-200 bg-flag-blue-soft">
-          <div className="mx-auto max-w-6xl px-4 py-8 text-sm text-gray-600 sm:px-6">
-            <p className="font-medium text-flag-blue">Hidden Figures</p>
-            <p className="mt-1">
-              Independent and nonpartisan. Vote data comes from the official
-              records of the U.S. House Clerk and U.S. Senate; member and bill
-              data from the Library of Congress and the unitedstates project.
+          <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+            <div className="grid gap-8 sm:grid-cols-3">
+              <div>
+                <p className="font-bold text-flag-blue">Hidden Figures</p>
+                <p className="mt-2 text-sm text-gray-600">
+                  Independent and nonpartisan congressional voting records.
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Explore
+                </p>
+                <ul className="mt-2 space-y-1.5 text-sm text-flag-blue">
+                  <li>
+                    <Link href="/members" className="hover:underline">
+                      Members
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="/bills" className="hover:underline">
+                      Votes &amp; legislation
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="/about" className="hover:underline">
+                      About &amp; methodology
+                    </Link>
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Data sources
+                </p>
+                <ul className="mt-2 space-y-1.5 text-sm text-flag-blue">
+                  <li>
+                    <a
+                      href="https://clerk.house.gov/Votes"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:underline"
+                    >
+                      U.S. House Clerk
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      href="https://www.senate.gov/legislative/votes_new.htm"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:underline"
+                    >
+                      U.S. Senate
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      href="https://www.congress.gov"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:underline"
+                    >
+                      Library of Congress
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      href="https://github.com/unitedstates/congress-legislators"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:underline"
+                    >
+                      unitedstates project
+                    </a>
+                  </li>
+                </ul>
+              </div>
+            </div>
+            <p className="mt-8 border-t border-gray-200 pt-4 text-xs text-gray-500">
+              Not affiliated with any government body. Official records are
+              linked above.
             </p>
           </div>
         </footer>
