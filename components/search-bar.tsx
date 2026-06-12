@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { MemberAvatar } from "@/components/member-avatar";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { partyAbbrev } from "@/lib/format";
@@ -92,17 +92,13 @@ export function SearchBar() {
                   onClick={() => router.push(`/members/${r.id}`)}
                   className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-flag-blue-soft"
                 >
-                  {r.photoUrl ? (
-                    <Image
-                      src={r.photoUrl}
-                      alt=""
-                      width={36}
-                      height={44}
-                      className="h-11 w-9 rounded object-cover bg-gray-100"
-                    />
-                  ) : (
-                    <span className="h-11 w-9 rounded bg-gray-100" />
-                  )}
+                  <MemberAvatar
+                    src={r.photoUrl}
+                    name={r.fullName}
+                    width={36}
+                    height={44}
+                    className="h-11 w-9 rounded bg-gray-100 object-cover text-xs"
+                  />
                   <span>
                     <span className="block text-sm font-semibold text-gray-900">
                       {r.fullName}

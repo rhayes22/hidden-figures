@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { BackLink } from "@/components/back-link";
+import { ExpandableTitle } from "@/components/expandable-title";
 import { VoteRoster, type RosterMember } from "@/components/vote-roster";
 import { VoteStatusBadge } from "@/components/vote-status";
 import { formatDate, partyAbbrev, partyBreakdown } from "@/lib/format";
@@ -126,12 +127,7 @@ export default async function VotePage({ params }: Props) {
         <span className="text-gray-400">{formatDate(rc.vote_date)}</span>
       </div>
 
-      <h1
-        className="mt-3 line-clamp-2 text-2xl font-bold text-gray-900 sm:text-3xl"
-        title={fullTitle}
-      >
-        {fullTitle}
-      </h1>
+      <ExpandableTitle text={fullTitle} />
       {rc.bill_title && (
         <p className="mt-1 text-gray-600">{rc.question}</p>
       )}
