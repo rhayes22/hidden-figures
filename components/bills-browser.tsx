@@ -55,22 +55,25 @@ export function BillsBrowser({ items }: { items: LegItem[] }) {
 
   return (
     <div className="mt-6">
-      {/* Type tabs */}
-      <div className="flex flex-wrap gap-1 border-b border-gray-200">
+      {/* Type tabs — segmented toggle */}
+      <div className="flex gap-1 overflow-x-auto rounded-xl border border-gray-200 bg-gray-100 p-1">
         {TABS.map((t) => (
           <button
             key={t.value}
             type="button"
             onClick={() => setTab(t.value)}
-            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+            aria-current={tab === t.value}
+            className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
               tab === t.value
-                ? "border-flag-red text-flag-blue"
-                : "border-transparent text-gray-500 hover:text-gray-800"
+                ? "bg-white text-flag-blue shadow-sm"
+                : "text-gray-500 hover:text-gray-800"
             }`}
           >
             {t.label}
             {counts[t.value] != null && (
-              <span className="ml-1.5 text-xs text-gray-400">
+              <span
+                className={tab === t.value ? "text-gray-400" : "text-gray-400"}
+              >
                 {counts[t.value]}
               </span>
             )}

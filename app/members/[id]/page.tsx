@@ -165,9 +165,13 @@ export default async function MemberPage({ params }: Props) {
               <span className="font-semibold text-green-700">{stats.yea} yea</span>
               {" · "}
               <span className="font-semibold text-flag-red">{stats.nay} nay</span>
-              {stats.missed > 0 && <> · {stats.missed} not voting</>}
-              {member.termEnd && (
-                <> · term ends {formatDate(member.termEnd)}</>
+              {stats.missed > 0 && (
+                <>
+                  {" · "}
+                  <span className="font-semibold text-gray-600">
+                    {stats.missed} missed
+                  </span>
+                </>
               )}
             </p>
           </div>

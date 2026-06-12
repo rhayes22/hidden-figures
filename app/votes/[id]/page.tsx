@@ -184,10 +184,12 @@ export default async function VotePage({ params }: Props) {
           <thead>
             <tr className="text-left text-xs uppercase tracking-wide text-gray-400">
               <th className="pb-1 font-semibold">Party</th>
-              <th className="pb-1 text-right font-semibold">Yea</th>
-              <th className="pb-1 text-right font-semibold">Nay</th>
-              <th className="pb-1 text-right font-semibold">Present</th>
-              <th className="pb-1 text-right font-semibold">Not Voting</th>
+              <th className="pb-1 pl-3 text-right font-semibold">Yea</th>
+              <th className="pb-1 pl-3 text-right font-semibold">Nay</th>
+              <th className="pb-1 pl-3 text-right font-semibold">Present</th>
+              <th className="pb-1 pl-3 text-right font-semibold">
+                Not&nbsp;voting
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -196,12 +198,16 @@ export default async function VotePage({ params }: Props) {
                 <td className="py-1.5 font-medium text-gray-800">
                   {partyAbbrev(row.party)} · {row.party}
                 </td>
-                <td className="py-1.5 text-right tabular-nums">{row.yea}</td>
-                <td className="py-1.5 text-right tabular-nums">{row.nay}</td>
-                <td className="py-1.5 text-right tabular-nums text-gray-500">
+                <td className="py-1.5 pl-3 text-right tabular-nums">
+                  {row.yea}
+                </td>
+                <td className="py-1.5 pl-3 text-right tabular-nums">
+                  {row.nay}
+                </td>
+                <td className="py-1.5 pl-3 text-right tabular-nums text-gray-500">
                   {row.present}
                 </td>
-                <td className="py-1.5 text-right tabular-nums text-gray-500">
+                <td className="py-1.5 pl-3 text-right tabular-nums text-gray-500">
                   {row.not_voting}
                 </td>
               </tr>

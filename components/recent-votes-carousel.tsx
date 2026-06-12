@@ -35,7 +35,7 @@ export function RecentVotesCarousel({ items }: { items: LegCardItem[] }) {
           style={{ transform: `translateX(-${index * 100}%)` }}
         >
           {items.map((it) => (
-            <div key={it.href} className="w-full shrink-0 px-1">
+            <div key={it.href} className="h-44 w-full shrink-0 px-1">
               <LegCard item={it} large />
             </div>
           ))}

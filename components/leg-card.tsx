@@ -81,7 +81,7 @@ export function LegCard({
       </div>
       <p
         className={`mt-2 font-medium text-gray-900 ${
-          large ? "line-clamp-3 text-xl font-semibold" : "line-clamp-2"
+          large ? "line-clamp-2 text-xl font-semibold" : "line-clamp-2"
         }`}
       >
         {item.title}
