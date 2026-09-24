@@ -15,6 +15,13 @@
       "when": 1781124358653,
       "tag": "0001_tan_yellow_claw",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789783314117,
+      "tag": "0002_productive_masked_marvel",
+      "breakpoints": true
     }
   ]
 }

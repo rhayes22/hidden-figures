@@ -45,4 +45,14 @@ describe("schema", () => {
     );
     expect(billId?.notNull).toBe(false);
   });
+
+  it("allows roll calls without published description or result text", () => {
+    const columns = getTableConfig(rollCalls).columns;
+    const description = columns.find((c) => c.name === "description");
+    const resultText = columns.find((c) => c.name === "result_text");
+    expect(description).toBeDefined();
+    expect(description?.notNull).toBe(false);
+    expect(resultText).toBeDefined();
+    expect(resultText?.notNull).toBe(false);
+  });
 });

@@ -17,6 +17,9 @@ export type ParsedRollCall = {
   voteDate: string; // YYYY-MM-DD
   question: string;
   result: string;
+  // Plain-English subject of the vote, when the chamber publishes one.
+  description: string | null;
+  resultText: string | null;
   billId: string | null;
   // House: bioguide ids. Senate: LIS ids (crosswalk to bioguide happens in the sync).
   positions: Array<{ memberId: string; position: ParsedPosition }>;
@@ -38,6 +41,29 @@ export function normalizePosition(raw: string): ParsedPosition {
   if (value === "nay" || value === "no") return "nay";
   if (value.startsWith("present")) return "present";
   return "not_voting";
+}
+
+// Phrases both chambers publish in place of an absent value. Carrying them
+// through would be worse than showing nothing.
+const FILLER_PHRASES = new Set([
+  "no statement of purpose on file",
+  "no statement of purpose",
+  "no short title on file",
+  "no title available",
+]);
+
+// Normalizes a raw XML value to displayable text, or null when the source
+// has nothing to say. Empty elements parse as "", and a missing element
+// stringifies to "undefined" — neither may reach the database.
+export function normalizeText(raw: unknown): string | null {
+  // The parser keeps attributes and nests children, so an element that gains
+  // either becomes an object (or an array of them); coercing that would yield
+  // "[object Object]", which is non-empty and would short-circuit the chain.
+  if (typeof raw !== "string" && typeof raw !== "number") return null;
+  const text = String(raw).trim().replace(/\s+/g, " ");
+  if (text === "" || text === "undefined") return null;
+  if (FILLER_PHRASES.has(text.toLowerCase().replace(/\.$/, ""))) return null;
+  return text;
 }
 
 // "H R 22", "H RES 57", "S. 1234", "S.J.Res. 7" -> bill id; nominations
@@ -115,6 +141,13 @@ export function parseHouseVote(xml: string): ParsedRollCall {
     voteDate: parseVoteDate(String(meta["action-date"])),
     question: String(meta["vote-question"]),
     result: String(meta["vote-result"]),
+    // vote-desc is empty precisely on amendment votes, which name the
+    // sponsor in amendment-author instead.
+    description:
+      normalizeText(meta["vote-desc"]) ??
+      normalizeText(meta["amendment-author"]),
+    // The House publishes no single result-text string.
+    resultText: null,
     billId: billIdFor(meta["legis-num"], congress),
     positions,
   };
@@ -129,10 +162,15 @@ export function parseSenateVote(xml: string): ParsedRollCall {
 
   const docType = vote.document?.document_type;
   const docNumber = vote.document?.document_number;
-  const billId =
+  const documentBillId =
     docType !== undefined && docNumber !== undefined
       ? billIdFor(`${docType}${docNumber}`, congress)
       : null;
+  // Amendment votes carry no document number of their own; the bill they
+  // amend is the only link back to legislation.
+  const billId =
+    documentBillId ??
+    billIdFor(vote.amendment?.amendment_to_document_number, congress);
 
   const positions = asArray(vote.members?.member).map(
     (entry: { lis_member_id: string; vote_cast: string }) => ({
@@ -153,6 +191,12 @@ export function parseSenateVote(xml: string): ParsedRollCall {
     ),
     question: String(vote.question),
     result: String(vote.vote_result),
+    description:
+      normalizeText(vote.vote_document_text) ??
+      normalizeText(vote.document?.document_title) ??
+      normalizeText(vote.amendment?.amendment_purpose) ??
+      normalizeText(vote.vote_title),
+    resultText: normalizeText(vote.vote_result_text),
     billId,
     positions,
   };

@@ -70,6 +70,12 @@ export function partyBreakdown(
   );
 }
 
+// Clamps text to a budget that has a hard limit elsewhere (a <title>, a meta
+// description); the ellipsis occupies the final character.
+export function truncate(text: string, max: number): string {
+  return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
+}
+
 export function formatDate(isoDate: string): string {
   const [y, m, d] = isoDate.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", {
