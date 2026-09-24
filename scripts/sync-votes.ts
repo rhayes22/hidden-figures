@@ -243,12 +243,19 @@ async function main() {
         voteDate: v.voteDate,
         question: v.question,
         result: v.result,
+        description: v.description,
+        resultText: v.resultText,
         billId: v.billId,
       })),
     )
     .onConflictDoUpdate({
       target: rollCalls.id,
-      set: { result: sql`excluded.result`, billId: sql`excluded.bill_id` },
+      set: {
+        result: sql`excluded.result`,
+        description: sql`excluded.description`,
+        resultText: sql`excluded.result_text`,
+        billId: sql`excluded.bill_id`,
+      },
     });
 
   // Positions for members we don't track (e.g. someone who left office

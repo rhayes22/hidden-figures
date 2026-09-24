@@ -24,6 +24,7 @@ type Row = {
   vote_date: string;
   question: string;
   result: string;
+  description: string | null;
   bill_type: string | null;
   bill_number: number | null;
   bill_title: string | null;
@@ -35,7 +36,7 @@ type Row = {
 async function getItems(): Promise<LegItem[]> {
   const res = await db.execute(sql`
     SELECT rc.id AS rc_id, rc.bill_id, rc.chamber, rc.vote_date::text AS vote_date,
-           rc.question, rc.result,
+           rc.question, rc.result, rc.description,
            b.bill_type, b.number AS bill_number, b.title AS bill_title,
            b.status AS bill_status,
            count(vp.*) FILTER (WHERE vp.position = 'yea')::int AS yea,
@@ -65,7 +66,7 @@ async function getItems(): Promise<LegItem[]> {
         chambers: [row.chamber],
         originChamber: row.chamber as "house" | "senate",
         label: row.question.replace(/^On the |^On /i, ""),
-        title: row.question,
+        title: row.description ?? row.question,
         date: row.vote_date,
         yea: row.yea,
         nay: row.nay,

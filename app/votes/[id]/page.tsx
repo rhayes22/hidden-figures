@@ -7,7 +7,12 @@ import { BackLink } from "@/components/back-link";
 import { ExpandableTitle } from "@/components/expandable-title";
 import { VoteRoster, type RosterMember } from "@/components/vote-roster";
 import { VoteStatusBadge } from "@/components/vote-status";
-import { formatDate, partyAbbrev, partyBreakdown } from "@/lib/format";
+import {
+  formatDate,
+  partyAbbrev,
+  partyBreakdown,
+  truncate,
+} from "@/lib/format";
 
 // Cache rendered pages with ISR; data changes at most daily (nightly sync).
 // Empty generateStaticParams opts the route into on-demand ISR (nothing is
@@ -22,7 +27,7 @@ type Props = { params: Promise<{ id: string }> };
 async function getRollCall(id: string) {
   const rows = await db.execute(sql`
     SELECT rc.id, rc.chamber, rc.vote_date, rc.question, rc.result,
-           rc.bill_id, b.title AS bill_title
+           rc.description, rc.bill_id, b.title AS bill_title
     FROM roll_calls rc
     LEFT JOIN bills b ON b.id = rc.bill_id
     WHERE rc.id = ${id}
@@ -34,6 +39,7 @@ async function getRollCall(id: string) {
     vote_date: string;
     question: string;
     result: string;
+    description: string | null;
     bill_id: string | null;
     bill_title: string | null;
   } | null;
@@ -51,7 +57,8 @@ async function getRoster(id: string): Promise<RosterMember[]> {
 
 async function getOtherVotesOnBill(billId: string, currentId: string) {
   const rows = await db.execute(sql`
-    SELECT rc.id, rc.chamber, rc.vote_date, rc.question, rc.result
+    SELECT rc.id, rc.chamber, rc.vote_date, rc.question, rc.result,
+           rc.description
     FROM roll_calls rc
     WHERE rc.bill_id = ${billId} AND rc.id <> ${currentId}
     ORDER BY rc.vote_date DESC, rc.roll_number DESC
@@ -62,6 +69,7 @@ async function getOtherVotesOnBill(billId: string, currentId: string) {
     vote_date: string;
     question: string;
     result: string;
+    description: string | null;
   }>;
 }
 
@@ -88,10 +96,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
   const rc = await getRollCall(id);
   if (!rc) return { title: "Vote not found" };
-  const subject = rc.bill_title ?? rc.question;
+  const subject = rc.bill_title ?? rc.description ?? rc.question;
   return {
-    title: `${subject} — ${rc.result}`,
-    description: `Full roll-call vote: how every member of the U.S. ${rc.chamber === "senate" ? "Senate" : "House"} voted on ${subject} (${formatDate(rc.vote_date)}).`,
+    title: `${truncate(subject, 70)} — ${rc.result}`,
+    description: `Full roll-call vote: how every member of the U.S. ${rc.chamber === "senate" ? "Senate" : "House"} voted on ${truncate(subject, 150)} (${formatDate(rc.vote_date)}).`,
   };
 }
 
@@ -114,7 +122,7 @@ export default async function VotePage({ params }: Props) {
         return `${type.toUpperCase()} ${num}`;
       })()
     : null;
-  const fullTitle = rc.bill_title ?? rc.question;
+  const fullTitle = rc.bill_title ?? rc.description ?? rc.question;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
@@ -134,7 +142,7 @@ export default async function VotePage({ params }: Props) {
       </div>
 
       <ExpandableTitle text={fullTitle} />
-      {rc.bill_title && (
+      {fullTitle !== rc.question && (
         <p className="mt-1 text-gray-600">{rc.question}</p>
       )}
 
@@ -225,27 +233,31 @@ export default async function VotePage({ params }: Props) {
             Other votes on this bill
           </h2>
           <ul className="mt-3 space-y-2">
-            {others.map((o) => (
-              <li key={o.id}>
-                <Link
-                  href={`/votes/${o.id}`}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 hover:bg-flag-blue-soft/50"
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate font-medium text-gray-900">
-                      {o.question}
+            {others.map((o) => {
+              const subject = o.description ?? o.question;
+              return (
+                <li key={o.id}>
+                  <Link
+                    href={`/votes/${o.id}`}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 hover:bg-flag-blue-soft/50"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium text-gray-900">
+                        {subject}
+                      </span>
+                      <span className="block text-xs text-gray-500">
+                        {subject === o.question ? "" : `${o.question} · `}
+                        {o.chamber === "senate" ? "Senate" : "House"} ·{" "}
+                        {formatDate(o.vote_date)}
+                      </span>
                     </span>
-                    <span className="block text-xs text-gray-500">
-                      {o.chamber === "senate" ? "Senate" : "House"} ·{" "}
-                      {formatDate(o.vote_date)}
+                    <span className="shrink-0 text-sm font-medium text-gray-600">
+                      {o.result}
                     </span>
-                  </span>
-                  <span className="shrink-0 text-sm font-medium text-gray-600">
-                    {o.result}
-                  </span>
-                </Link>
-              </li>
-            ))}
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}

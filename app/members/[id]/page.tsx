@@ -84,7 +84,7 @@ async function getPartyLoyalty(
 async function getRecentPositions(id: string) {
   const rows = await db.execute(sql`
     SELECT rc.id, rc.chamber, rc.vote_date, rc.question, rc.result,
-           b.title, vp.position
+           rc.description, b.title, vp.position
     FROM vote_positions vp
     JOIN roll_calls rc ON rc.id = vp.roll_call_id
     LEFT JOIN bills b ON b.id = rc.bill_id
@@ -98,6 +98,7 @@ async function getRecentPositions(id: string) {
     vote_date: string;
     question: string;
     result: string;
+    description: string | null;
     title: string | null;
     position: string;
   }>;
@@ -233,29 +234,32 @@ export default async function MemberPage({ params }: Props) {
           </p>
         ) : (
           <ul className="mt-4 divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white">
-            {positions.map((p) => (
-              <li key={p.id}>
-                <Link
-                  href={`/votes/${p.id}`}
-                  className="flex items-center gap-4 px-5 py-4 hover:bg-flag-blue-soft/50"
-                >
-                  <span
-                    className={`w-24 shrink-0 rounded-full px-2.5 py-1 text-center text-xs font-bold ${positionBadgeClass(p.position)}`}
+            {positions.map((p) => {
+              const subject = p.title ?? p.description ?? p.question;
+              return (
+                <li key={p.id}>
+                  <Link
+                    href={`/votes/${p.id}`}
+                    className="flex items-center gap-4 px-5 py-4 hover:bg-flag-blue-soft/50"
                   >
-                    {positionLabel(p.position)}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block truncate font-medium text-gray-900">
-                      {p.title ?? p.question}
+                    <span
+                      className={`w-24 shrink-0 rounded-full px-2.5 py-1 text-center text-xs font-bold ${positionBadgeClass(p.position)}`}
+                    >
+                      {positionLabel(p.position)}
                     </span>
-                    <span className="block text-xs text-gray-500">
-                      {p.title ? `${p.question} · ` : ""}
-                      {p.result} · {formatDate(p.vote_date)}
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium text-gray-900">
+                        {subject}
+                      </span>
+                      <span className="block text-xs text-gray-500">
+                        {subject === p.question ? "" : `${p.question} · `}
+                        {p.result} · {formatDate(p.vote_date)}
+                      </span>
                     </span>
-                  </span>
-                </Link>
-              </li>
-            ))}
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

@@ -62,6 +62,10 @@ export const rollCalls = pgTable(
     voteDate: date("vote_date").notNull(),
     question: text("question").notNull(),
     result: text("result").notNull(),
+    // Plain-English subject and full result line as published in the chamber
+    // XML; null where the source publishes neither.
+    description: text("description"),
+    resultText: text("result_text"),
     billId: text("bill_id").references(() => bills.id),
   },
   (table) => [

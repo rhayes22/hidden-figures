@@ -27,6 +27,7 @@ type RecentVote = {
   vote_date: string;
   question: string;
   result: string;
+  description: string | null;
   title: string | null;
   bill_type: string | null;
   bill_number: number | null;
@@ -49,7 +50,7 @@ function toCardItem(v: RecentVote): LegCardItem {
     chamber: v.chamber as "house" | "senate",
     phaseLabel: phase.label,
     phaseKind: phase.kind,
-    title: v.title ?? v.question,
+    title: v.title ?? v.description ?? v.question,
     date: v.vote_date,
     yea: v.yea,
     nay: v.nay,
@@ -77,15 +78,15 @@ async function getStats() {
 
 async function getRecentVotes(): Promise<RecentVote[]> {
   const rows = await db.execute(sql`
-    SELECT rc.id, rc.chamber, rc.vote_date, rc.question, rc.result, b.title,
-      b.bill_type, b.number AS bill_number,
+    SELECT rc.id, rc.chamber, rc.vote_date, rc.question, rc.result,
+      rc.description, b.title, b.bill_type, b.number AS bill_number,
       count(*) FILTER (WHERE vp.position = 'yea')::int AS yea,
       count(*) FILTER (WHERE vp.position = 'nay')::int AS nay
     FROM roll_calls rc
     LEFT JOIN bills b ON b.id = rc.bill_id
     LEFT JOIN vote_positions vp ON vp.roll_call_id = rc.id
-    GROUP BY rc.id, rc.chamber, rc.vote_date, rc.question, rc.result, b.title,
-      b.bill_type, b.number
+    GROUP BY rc.id, rc.chamber, rc.vote_date, rc.question, rc.result,
+      rc.description, b.title, b.bill_type, b.number
     ORDER BY rc.vote_date DESC, rc.roll_number DESC
     LIMIT 10
   `);

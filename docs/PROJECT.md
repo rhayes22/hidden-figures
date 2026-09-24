@@ -8,7 +8,8 @@ the knowledge document to start from.
 - **Repo:** https://github.com/rhayes22/hidden-figures (public)
 - **Owner:** Ryan Hayes
 - **Status:** Federal MVP feature-complete and deployed on Vercel; iterating on UI/features.
-- **Last updated:** 2026-06-12
+- **Last updated:** 2026-09-18
+- **Active plan:** the current epic and its ordered backlog live in [`.claude/current-work.md`](../.claude/current-work.md) — that file, not §11 below, is what work is being run from.
 
 ---
 
@@ -85,7 +86,7 @@ that must be crosswalked to bioguide via `congress-legislators`.
 
 | Source | Used for |
 | --- | --- |
-| **Congress.gov API** (`api.congress.gov`) | Members, bills, summaries, sponsorship counts. Free key. 5,000 req/hr. |
+| **Congress.gov API** (`api.congress.gov`) | Members, bills, summaries, sponsorship counts. Free key. **20,000 req/hr** (measured 2026-09-05; older notes said 5,000). |
 | **House Clerk roll-call XML** (`clerk.house.gov`) | House votes + per-member positions (bioguide-keyed) |
 | **Senate roll-call XML** (`senate.gov` LIS) | Senate votes + per-member positions (LIS-keyed) |
 | **unitedstates/congress-legislators** (GitHub YAML) | Roster, party, terms, the canonical ID crosswalk, `member_since` |
@@ -133,10 +134,21 @@ roll-call positions — votes come from the chamber XML feeds, not the API.
 iteration). Re-enable by uncommenting two lines. Manual runs still work via the
 Actions tab (`workflow_dispatch`, with a custom roll-calls-per-chamber count).
 
-**Current data:** the **full 119th Congress** is ingested (backfilled 2026-06-12) —
-1,414 roll calls (584 House + 830 Senate, Jan 2025 → present), ~331k vote positions,
+**Current data:** the 119th Congress is ingested through **2026-06-11** —
+1,414 roll calls (584 House + 830 Senate, Jan 2025 → that date), 330,867 vote positions,
 441 bills, 530 in-office members. DB size ≈ 65 MB (~13% of Neon's 500 MB free tier);
 full-Congress data fits the free tier comfortably.
+
+⚠️ **The data is behind by roughly 220 roll calls** because the cron has been paused since
+June. Catching up and re-enabling it is slice 3 of the current epic. Verified 2026-09-18.
+
+**Known gaps in what is ingested** (all being addressed in the current epic):
+- Bill `summary` and `short_title` are NULL for all 441 bills — the columns exist, the sync
+  never fills them.
+- 577 Senate roll calls (nominations, cloture, amendments) carry no bill link and display only
+  a bare question. The plain-English text is in the XML we already download and discard —
+  Senate `vote_document_text` / `vote_title` / `vote_result_text`, House `vote-desc`.
+- `pg_trgm` is **not installed**. Member search is a plain `ilike '%q%'`; there is no bill search.
 
 ## 8. Conventions & workflow
 
@@ -177,6 +189,10 @@ npm run dev        # http://localhost:3000  (uses the hosted Neon DB)
   wait ~5–10 minutes and re-run (idempotent).
 
 ## 11. Backlog / what's next
+
+> **Superseded.** The active, ordered backlog is [`.claude/current-work.md`](../.claude/current-work.md).
+> What follows is the older list, kept because the "saved for later" ideas below aren't recorded
+> elsewhere. Long-term expansion research lives in [`docs/expansion/`](expansion/).
 
 **High-value next steps**
 1. **Re-enable the nightly cron** once iteration settles (uncomment the schedule in
