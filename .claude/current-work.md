@@ -53,6 +53,8 @@ CI on every PR: lint → typecheck → test → build. `main` is protected; bran
 - **Agents run production migrations and re-syncs themselves.** No staging database exists. Migrations here are additive and nullable; syncs are idempotent upserts identical to what the nightly cron does. The owner is told what ran, not asked each time.
 - **The design spike runs in parallel with the rest of Phase A.** Slice 8 produces mockups, not shipped code, and depends on nothing left in Phase A. The homepage redesign (slice 11) genuinely does collide with slices 2, 4 and 6, so it waits.
 - **Cron stays off until ingest verifies itself.** Slice 3 before slice 4, deliberately: an unattended nightly job writing unverified data to production is what tally assertions exist to prevent. The cost is accepted — the site drifts about a week per week until then.
+- **An amendment vote page leads with the amendment.** Headline the amendment's own purpose, with the parent bill beneath as context. The page is about the amendment, and slice 1 already fetched the text — it was just invisible behind the bill title on 193 pages.
+- **Phase A runs without a per-slice spec gate.** The epic is signed off; each slice still gets its own branch, PR, QA pass and reviewer approval, and stops for genuine product decisions or outward-facing actions.
 - **Analytics come last.** Of the saved-for-later ideas, attendance and the bipartisanship meter are in; "closest votes" is dropped for now. They're built per-Congress, after the foundation, so they aren't built twice.
 - **State legislatures stay out.** The `jurisdictions` table is the seam; nothing else until a per-state coverage map exists.
 
@@ -89,7 +91,7 @@ CI on every PR: lint → typecheck → test → build. `main` is protected; bran
 **Phase A — data & correctness (current Congress)**
 
 - [x] 1. Readable vote descriptions **(done 2026-09-24)** — parse the plain-English fields both chambers already publish; nominations name the nominee, amendments link to their parent bill; re-sync the 119th. Spec: `.claude/specs/slice-01-readable-vote-descriptions.md`
-- [ ] 2. Correct vote classification — **now 194 roll calls misfiled** (was 65; slice 1 linked ~129 more Senate amendment votes to parent bills). House amendment votes are filed as bills because they carry a bill id and `categoryForBillType` wins over `categoryForQuestion`; the House breakdown also reports 583 of 584 votes as passed-or-failed. Pure `lib/` logic, so it's provable by unit test. **Moved up from 6.** Also decide here: an amendment's own description is currently invisible on its vote page because `bills.title` wins the fallback — 193 roll calls affected.
+- [x] 2. Correct vote classification **(done 2026-09-24)** — **now 194 roll calls misfiled** (was 65; slice 1 linked ~129 more Senate amendment votes to parent bills). House amendment votes are filed as bills because they carry a bill id and `categoryForBillType` wins over `categoryForQuestion`; the House breakdown also reports 583 of 584 votes as passed-or-failed. Pure `lib/` logic, so it's provable by unit test. **Moved up from 6.** Also decide here: an amendment's own description is currently invisible on its vote page because `bills.title` wins the fallback — 193 roll calls affected.
 - [ ] 3. Self-verifying ingest — assert stored positions sum to the official published tally; fail loudly on mismatch.
 - [ ] 4. Fresh data — re-enable the nightly cron and show "data current as of" in the UI. (Slice 1's re-sync already catches up the ~220 missing roll calls.)
 - [ ] 5. Bill summaries — populate `summary` and `short_title` from Congress.gov (0 of 509 bills have either today); surface them on bill and vote pages. **Two carried-over notes:** the `bill_title ?? description ?? question` chain is spelled in five places and they must all change together when `short_title` joins it, or `<title>` and `<h1>` will disagree; and if this slice passes a *computed* budget to `truncate`, add the `max <= 0` guard it currently lacks.
@@ -125,9 +127,20 @@ CI on every PR: lint → typecheck → test → build. `main` is protected; bran
 
 ## Now
 
-Slice 1 merged. **Next: slice 2 (vote classification) and slice 8 (design direction spike) in parallel** — the spike blocks nothing in Phase A and ends with a decision from Ryan, so it runs off the critical path.
+Slices 1 and 2 merged. **Next: slice 3 (self-verifying ingest).** Then 4, 5, 6, 7 sequentially — 3 and 5 share `scripts/sync-votes.ts`, 2 and 7 shared the page files, so none of Phase A parallelises. Phase B follows.
 
-Data is 7 days stale (latest roll call 2026-09-17) and drifts a week per week until slice 4. Re-sync by hand with `npm run sync:votes -- 200` if a demo needs current data.
+Data is stale (latest roll call 2026-09-17) and drifts a week per week until slice 4. Re-sync by hand with `npm run sync:votes -- 200` if a demo needs current data.
+
+## Carried findings (raised in review, deliberately not fixed yet)
+
+From slice 2's review. None blocks anything; each names where it should land.
+
+- **`billPhase` misreads joint resolutions.** `PASSAGE_Q` doesn't match `"On the Joint Resolution"` (31 live rows) or `"On the Resolution"` (5), and `PASSED` doesn't know `Defeated` — so a joint resolution that actually passed, or was defeated, can only reach "Advanced". Correctness bug on `/bills` badges. **Worth fixing before Phase B**, so the redesign isn't built on wrong badges.
+- **A bill whose only roll calls are amendment votes loses its Bills-tab card.** Zero bills today, but reachable as soon as the cron lands a bill mid-amendment-series (15 amendment votes on day 1, passage on day 3). Becomes live with slice 4.
+- **A tabling motion on an amendment would classify as an amendment and take a green badge.** "On the Motion to Table the Amendment" matches the amendment predicate, and `votePhase("Motion to Table Agreed to")` reads Passed — so a killed amendment would render as a successful one. Zero such rows today; arrives via `sync:votes`, not via a code change.
+- **`resultKind` now tests `/confirm/i` before the failure predicate**, inverting the old order. A string carrying both — "Confirmation Rejected" — would read passed where it once read failed. No such row today.
+- **`components/chamber-breakdown.tsx` is a 5-column `w-full` table with no `overflow-x` wrapper** — unverified at 320px. → Phase B mobile pass (slice 12).
+- **`/bills` sorts by date only**, and stable sort puts solo cards above grouped ones, so an amendment sorts above the bill it amends on a shared date. → Phase B.
 
 ## Notes for next session
 

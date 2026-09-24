@@ -14,8 +14,9 @@ import { db } from "@/db";
 import {
   CATEGORIES,
   CATEGORY_LABEL,
-  categoryForBillType,
-  categoryForQuestion,
+  categoryForRollCall,
+  leadTextFor,
+  resultKind,
   votePhase,
 } from "@/lib/legislation";
 
@@ -37,9 +38,10 @@ type RecentVote = {
 
 function toCardItem(v: RecentVote): LegCardItem {
   const phase = votePhase(v.result);
-  const category = v.bill_type
-    ? categoryForBillType(v.bill_type)
-    : categoryForQuestion(v.question);
+  const category = categoryForRollCall({
+    question: v.question,
+    billType: v.bill_type,
+  });
   const label = v.bill_type
     ? `${v.bill_type.toUpperCase()} ${v.bill_number}`
     : v.question.replace(/^On the |^On /i, "");
@@ -50,7 +52,12 @@ function toCardItem(v: RecentVote): LegCardItem {
     chamber: v.chamber as "house" | "senate",
     phaseLabel: phase.label,
     phaseKind: phase.kind,
-    title: v.title ?? v.description ?? v.question,
+    title: leadTextFor({
+      question: v.question,
+      billType: v.bill_type,
+      billTitle: v.title,
+      description: v.description,
+    }),
     date: v.vote_date,
     yea: v.yea,
     nay: v.nay,
@@ -95,11 +102,12 @@ async function getRecentVotes(): Promise<RecentVote[]> {
 
 function emptyPerformance(): Performance {
   return Object.fromEntries(
-    CATEGORIES.map((c) => [c, { votedOn: 0, passed: 0, failed: 0 }]),
+    CATEGORIES.map((c) => [c, { votedOn: 0, passed: 0, failed: 0, other: 0 }]),
   ) as Performance;
 }
 
-// Per-chamber, per-category counts of roll calls voted on / passed / failed.
+// Per-chamber, per-category counts of roll calls voted on / passed / failed /
+// neither.
 async function getPerformance(): Promise<{
   house: Performance;
   senate: Performance;
@@ -118,14 +126,16 @@ async function getPerformance(): Promise<{
   const out = { house: emptyPerformance(), senate: emptyPerformance() };
   for (const r of rows) {
     if (r.chamber !== "house" && r.chamber !== "senate") continue;
-    const category = r.bill_type
-      ? categoryForBillType(r.bill_type)
-      : categoryForQuestion(r.question);
+    const category = categoryForRollCall({
+      question: r.question,
+      billType: r.bill_type,
+    });
     const cell = out[r.chamber][category];
     cell.votedOn += 1;
-    const kind = votePhase(r.result).kind;
+    const kind = resultKind(r.result);
     if (kind === "passed") cell.passed += 1;
     else if (kind === "failed") cell.failed += 1;
+    else cell.other += 1;
   }
   return out;
 }

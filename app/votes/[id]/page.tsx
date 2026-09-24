@@ -13,6 +13,7 @@ import {
   partyBreakdown,
   truncate,
 } from "@/lib/format";
+import { categoryForRollCall, leadTextFor } from "@/lib/legislation";
 
 // Cache rendered pages with ISR; data changes at most daily (nightly sync).
 // Empty generateStaticParams opts the route into on-demand ISR (nothing is
@@ -27,7 +28,7 @@ type Props = { params: Promise<{ id: string }> };
 async function getRollCall(id: string) {
   const rows = await db.execute(sql`
     SELECT rc.id, rc.chamber, rc.vote_date, rc.question, rc.result,
-           rc.description, rc.bill_id, b.title AS bill_title
+           rc.description, rc.bill_id, b.bill_type, b.title AS bill_title
     FROM roll_calls rc
     LEFT JOIN bills b ON b.id = rc.bill_id
     WHERE rc.id = ${id}
@@ -41,6 +42,7 @@ async function getRollCall(id: string) {
     result: string;
     description: string | null;
     bill_id: string | null;
+    bill_type: string | null;
     bill_title: string | null;
   } | null;
 }
@@ -96,7 +98,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
   const rc = await getRollCall(id);
   if (!rc) return { title: "Vote not found" };
-  const subject = rc.bill_title ?? rc.description ?? rc.question;
+  const subject = leadTextFor({
+    question: rc.question,
+    billType: rc.bill_type,
+    billTitle: rc.bill_title,
+    description: rc.description,
+  });
   return {
     title: `${truncate(subject, 70)} — ${rc.result}`,
     description: `Full roll-call vote: how every member of the U.S. ${rc.chamber === "senate" ? "Senate" : "House"} voted on ${truncate(subject, 150)} (${formatDate(rc.vote_date)}).`,
@@ -122,7 +129,23 @@ export default async function VotePage({ params }: Props) {
         return `${type.toUpperCase()} ${num}`;
       })()
     : null;
-  const fullTitle = rc.bill_title ?? rc.description ?? rc.question;
+  const fullTitle = leadTextFor({
+    question: rc.question,
+    billType: rc.bill_type,
+    billTitle: rc.bill_title,
+    description: rc.description,
+  });
+  const isAmendment =
+    categoryForRollCall({ question: rc.question, billType: rc.bill_type }) ===
+    "amendment";
+  // Derived from what leadTextFor actually returned, not from re-deriving its
+  // chain: the context line is suppressed exactly when the bill title is already
+  // the headline, so it can never repeat the title directly beneath itself.
+  const showParentBill =
+    isAmendment &&
+    billNumber !== null &&
+    rc.bill_title !== null &&
+    fullTitle !== rc.bill_title;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
@@ -144,6 +167,11 @@ export default async function VotePage({ params }: Props) {
       <ExpandableTitle text={fullTitle} />
       {fullTitle !== rc.question && (
         <p className="mt-1 text-gray-600">{rc.question}</p>
+      )}
+      {showParentBill && (
+        <p className="mt-1 text-gray-600">
+          Amendment to {billNumber} · {rc.bill_title}
+        </p>
       )}
 
       {/* Scoreboard + party breakdown */}
