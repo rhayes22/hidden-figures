@@ -13,7 +13,7 @@ The 535 voting members of the current (119th) Congress — House and Senate. His
 - **Web:** Next.js (App Router) on Vercel
 - **Database:** Postgres on Neon, schema + migrations via Drizzle ([db/schema.ts](db/schema.ts))
 - **Ingestion:** Node script run nightly via GitHub Actions cron
-- **Search:** Postgres `pg_trgm`
+- **Search:** Postgres `ilike` substring match today; `pg_trgm` fuzzy search is planned, not yet installed
 
 ## Data sources
 
