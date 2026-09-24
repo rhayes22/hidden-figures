@@ -3,7 +3,12 @@
 import { useState } from "react";
 import { CATEGORIES, CATEGORY_LABEL, type Category } from "@/lib/legislation";
 
-export type CatStats = { votedOn: number; passed: number; failed: number };
+export type CatStats = {
+  votedOn: number;
+  passed: number;
+  failed: number;
+  other: number;
+};
 export type Performance = Record<Category, CatStats>;
 export type Parties = { d: number; r: number; i: number; total: number };
 export type ChamberData = { parties: Parties; performance: Performance };
@@ -33,8 +38,9 @@ function PerformanceTable({ data }: { data: Performance }) {
       votedOn: acc.votedOn + data[c].votedOn,
       passed: acc.passed + data[c].passed,
       failed: acc.failed + data[c].failed,
+      other: acc.other + data[c].other,
     }),
-    { votedOn: 0, passed: 0, failed: 0 },
+    { votedOn: 0, passed: 0, failed: 0, other: 0 },
   );
   return (
     <div className="mt-4 rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
@@ -45,6 +51,7 @@ function PerformanceTable({ data }: { data: Performance }) {
             <th className="pb-2 text-right font-semibold">Voted on</th>
             <th className="pb-2 text-right font-semibold">Passed</th>
             <th className="pb-2 text-right font-semibold">Failed</th>
+            <th className="pb-2 text-right font-semibold">Other</th>
           </tr>
         </thead>
         <tbody>
@@ -62,6 +69,9 @@ function PerformanceTable({ data }: { data: Performance }) {
               <td className="py-2 text-right font-medium tabular-nums text-flag-red">
                 {data[c].failed}
               </td>
+              <td className="py-2 text-right tabular-nums text-gray-500">
+                {data[c].other}
+              </td>
             </tr>
           ))}
           <tr className="border-t-2 border-gray-200 font-bold text-gray-900">
@@ -72,6 +82,9 @@ function PerformanceTable({ data }: { data: Performance }) {
             </td>
             <td className="py-2 text-right tabular-nums text-flag-red">
               {totals.failed}
+            </td>
+            <td className="py-2 text-right tabular-nums text-gray-500">
+              {totals.other}
             </td>
           </tr>
         </tbody>

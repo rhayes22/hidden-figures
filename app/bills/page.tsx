@@ -5,7 +5,8 @@ import { BillsBrowser, type LegItem } from "@/components/bills-browser";
 import {
   billPhase,
   categoryForBillType,
-  categoryForQuestion,
+  categoryForRollCall,
+  leadTextFor,
   votePhase,
 } from "@/lib/legislation";
 
@@ -53,12 +54,38 @@ async function getItems(): Promise<LegItem[]> {
   const billGroups = new Map<string, Row[]>();
 
   for (const row of rows) {
-    if (row.bill_id) {
+    const category = categoryForRollCall({
+      question: row.question,
+      billType: row.bill_type,
+    });
+    if (category === "amendment") {
+      // An amendment vote gets its own card rather than disappearing into its
+      // parent bill's, and carries the chamber that voted on it.
+      items.push({
+        key: row.rc_id,
+        href: `/votes/${row.rc_id}`,
+        category,
+        chambers: [row.chamber],
+        originChamber: row.chamber as "house" | "senate",
+        label: row.bill_id
+          ? `${row.bill_type!.toUpperCase()} ${row.bill_number}`
+          : row.question.replace(/^On the |^On /i, ""),
+        title: leadTextFor({
+          question: row.question,
+          billType: row.bill_type,
+          billTitle: row.bill_title,
+          description: row.description,
+        }),
+        date: row.vote_date,
+        yea: row.yea,
+        nay: row.nay,
+        phase: votePhase(row.result),
+      });
+    } else if (row.bill_id) {
       const group = billGroups.get(row.bill_id) ?? [];
       group.push(row);
       billGroups.set(row.bill_id, group);
     } else {
-      const category = categoryForQuestion(row.question);
       items.push({
         key: row.rc_id,
         href: `/votes/${row.rc_id}`,

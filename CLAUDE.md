@@ -56,8 +56,13 @@ pauses and failures are warned about loudly rather than swallowed.
 `hr-1234-119` (type-number-congress), roll calls `house-119-1-123`
 (chamber-congress-session-roll). Schema PKs, ingestion, and URL routes all use them, so change
 them nowhere else. Roll calls with no associated bill (nominations, cloture, procedural motions)
-carry `bill_id = null` and are classified from the question text by `categoryForQuestion`
-([lib/legislation.ts](lib/legislation.ts)).
+carry `bill_id = null`. **Every** roll call — linked or not — is classified by
+`categoryForRollCall` ([lib/legislation.ts](lib/legislation.ts)), which reads the question first
+(`/nomination/i`, then `/amendment/i` unless the question also matches `/concur/i`), falls back to
+the bill type, and only then defaults to `motion`. `categoryForBillType` classifies a *bill*, not a
+roll call — it is what the grouped per-bill card uses, and it is never called on a roll call.
+`resultKind` in the same module is the single reading of a result string behind every vote badge
+and count.
 
 **Web data access has no query layer.** Server components import `db` from [db/index.ts](db/index.ts)
 and write their own Drizzle queries inline; aggregate stats (party loyalty, chamber breakdowns,

@@ -14,6 +14,7 @@ import {
   seatLabel,
   STATE_NAMES,
 } from "@/lib/format";
+import { leadTextFor } from "@/lib/legislation";
 
 // Cache rendered pages with ISR; data changes at most daily (nightly sync).
 // Empty generateStaticParams opts the route into on-demand ISR (nothing is
@@ -84,7 +85,7 @@ async function getPartyLoyalty(
 async function getRecentPositions(id: string) {
   const rows = await db.execute(sql`
     SELECT rc.id, rc.chamber, rc.vote_date, rc.question, rc.result,
-           rc.description, b.title, vp.position
+           rc.description, b.bill_type, b.title, vp.position
     FROM vote_positions vp
     JOIN roll_calls rc ON rc.id = vp.roll_call_id
     LEFT JOIN bills b ON b.id = rc.bill_id
@@ -99,6 +100,7 @@ async function getRecentPositions(id: string) {
     question: string;
     result: string;
     description: string | null;
+    bill_type: string | null;
     title: string | null;
     position: string;
   }>;
@@ -235,7 +237,12 @@ export default async function MemberPage({ params }: Props) {
         ) : (
           <ul className="mt-4 divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white">
             {positions.map((p) => {
-              const subject = p.title ?? p.description ?? p.question;
+              const subject = leadTextFor({
+                question: p.question,
+                billType: p.bill_type,
+                billTitle: p.title,
+                description: p.description,
+              });
               return (
                 <li key={p.id}>
                   <Link
