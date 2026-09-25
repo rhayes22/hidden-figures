@@ -22,6 +22,13 @@
       "when": 1789783314117,
       "tag": "0002_productive_masked_marvel",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790295164449,
+      "tag": "0003_volatile_shatterstar",
+      "breakpoints": true
     }
   ]
 }

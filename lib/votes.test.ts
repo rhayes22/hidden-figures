@@ -263,6 +263,7 @@ describe("parseHouseVote", () => {
       description: null,
       resultText: null,
       billId: "hr-22-119",
+      tally: { kind: "none" },
     });
   });
 
@@ -309,6 +310,7 @@ describe("parseSenateVote", () => {
       description: null,
       resultText: null,
       billId: "s-1234-119",
+      tally: { kind: "none" },
     });
   });
 
@@ -710,5 +712,193 @@ describe("normalizeText scalar pass-through", () => {
       parseSenateVote(senateVoteXml(`<vote_result_text>2026</vote_result_text>`))
         .resultText,
     ).toBe("2026");
+  });
+});
+
+// --- Published tallies -------------------------------------------------------
+// Each fixture is a reduction of a real document fetched on 2026-09-24:
+// vote_119_2_00108.xml (Senate), clerk.house.gov/evs/2026/roll300.xml and
+// evs/2025/roll002.xml (House).
+
+const houseTotals2026 = `
+<vote-totals>
+<totals-by-party-header>
+<party-header>Party</party-header>
+<yea-header>Ayes</yea-header>
+</totals-by-party-header>
+<totals-by-party>
+<party>Republican</party>
+<yea-total>211</yea-total><nay-total>2</nay-total><present-total>0</present-total><not-voting-total>5</not-voting-total>
+</totals-by-party>
+<totals-by-party>
+<party>Democratic</party>
+<yea-total>2</yea-total><nay-total>209</nay-total><present-total>0</present-total><not-voting-total>3</not-voting-total>
+</totals-by-party>
+<totals-by-party>
+<party>Independent</party>
+<yea-total>1</yea-total><nay-total>0</nay-total><present-total>0</present-total><not-voting-total>0</not-voting-total>
+</totals-by-party>
+<totals-by-vote>
+<total-stub>Totals</total-stub>
+<yea-total>214</yea-total><nay-total>211</nay-total><present-total>0</present-total><not-voting-total>8</not-voting-total>
+</totals-by-vote>
+</vote-totals>`;
+
+describe("senate published tally", () => {
+  it("reads the count block, with an empty <present/> as zero", () => {
+    expect(
+      parseSenateVote(
+        senateVoteXml(`
+          <count><yeas>51</yeas><nays>47</nays><present/><absent>2</absent></count>`),
+      ).tally,
+    ).toEqual({ kind: "buckets", yea: 51, nay: 47, present: 0, notVoting: 2 });
+  });
+
+  it("reports no tally when the count block is absent", () => {
+    expect(parseSenateVote(senateVoteXml("")).tally).toEqual({ kind: "none" });
+  });
+
+  it("reports no tally, not four zeros, when every child is empty", () => {
+    expect(
+      parseSenateVote(
+        senateVoteXml(`<count><yeas/><nays/><present/><absent/></count>`),
+      ).tally,
+    ).toEqual({ kind: "none" });
+  });
+
+  it("reads the empty children as zero once any one number is present", () => {
+    // The missing/empty -> 0 rule only applies to a tally that printed at
+    // least one number; this is the boundary between it and the all-empty
+    // case below, and the two must not collapse into each other.
+    expect(
+      parseSenateVote(
+        senateVoteXml(`<count><yeas>51</yeas><nays/><present/><absent/></count>`),
+      ).tally,
+    ).toEqual({ kind: "buckets", yea: 51, nay: 0, present: 0, notVoting: 0 });
+  });
+
+  it("reports a malformed tally rather than NaN on a non-numeric count", () => {
+    const tally = parseSenateVote(
+      senateVoteXml(
+        `<count><yeas>fifty-one</yeas><nays>47</nays><present/><absent>2</absent></count>`,
+      ),
+    ).tally;
+    expect(tally.kind).toBe("malformed");
+    if (tally.kind !== "malformed") return;
+    expect(tally.reason).toContain("yeas");
+  });
+});
+
+describe("house published tally", () => {
+  it("reads totals-by-vote", () => {
+    expect(parseHouseVote(houseVoteXml(houseTotals2026)).tally).toEqual({
+      kind: "buckets",
+      yea: 214,
+      nay: 211,
+      present: 0,
+      notVoting: 8,
+    });
+  });
+
+  it("reports a malformed tally when the party rows do not sum to it", () => {
+    const tally = parseHouseVote(
+      houseVoteXml(houseTotals2026.replace("<yea-total>211</yea-total>", "<yea-total>210</yea-total>")),
+    ).tally;
+    expect(tally.kind).toBe("malformed");
+    if (tally.kind !== "malformed") return;
+    expect(tally.reason).toContain("totals-by-party");
+  });
+
+  it("reads a single party row as correctly as three", () => {
+    expect(
+      parseHouseVote(
+        houseVoteXml(`
+<vote-totals>
+<totals-by-party>
+<party>Republican</party>
+<yea-total>214</yea-total><nay-total>211</nay-total><present-total>0</present-total><not-voting-total>8</not-voting-total>
+</totals-by-party>
+<totals-by-vote>
+<yea-total>214</yea-total><nay-total>211</nay-total><present-total>0</present-total><not-voting-total>8</not-voting-total>
+</totals-by-vote>
+</vote-totals>`),
+      ).tally,
+    ).toEqual({ kind: "buckets", yea: 214, nay: 211, present: 0, notVoting: 8 });
+  });
+
+  it("sums the candidate rows of a Speaker election", () => {
+    // evs/2025/roll002.xml — 434 members listed, no yea/nay row published.
+    expect(
+      parseHouseVote(
+        houseVoteXml(`
+<vote-totals>
+<totals-by-candidate><candidate>Johnson (LA)</candidate><candidate-total>218</candidate-total></totals-by-candidate>
+<totals-by-candidate><candidate>Jeffries</candidate><candidate-total>215</candidate-total></totals-by-candidate>
+<totals-by-candidate><candidate>Emmer</candidate><candidate-total>1</candidate-total></totals-by-candidate>
+<totals-by-candidate><candidate>Present</candidate><candidate-total>0</candidate-total></totals-by-candidate>
+<totals-by-candidate><candidate>Not Voting</candidate><candidate-total>0</candidate-total></totals-by-candidate>
+</vote-totals>`),
+      ).tally,
+    ).toEqual({ kind: "total", total: 434 });
+  });
+
+  it("reads an empty totals-by-vote bucket as zero", () => {
+    expect(
+      parseHouseVote(
+        houseVoteXml(`
+<vote-totals>
+<totals-by-vote>
+<yea-total>214</yea-total><nay-total>211</nay-total><present-total/><not-voting-total>8</not-voting-total>
+</totals-by-vote>
+</vote-totals>`),
+      ).tally,
+    ).toEqual({ kind: "buckets", yea: 214, nay: 211, present: 0, notVoting: 8 });
+  });
+
+  it("prefers totals-by-vote over candidate rows when a document carries both", () => {
+    expect(
+      parseHouseVote(
+        houseVoteXml(`
+<vote-totals>
+<totals-by-vote>
+<yea-total>214</yea-total><nay-total>211</nay-total><present-total>0</present-total><not-voting-total>8</not-voting-total>
+</totals-by-vote>
+<totals-by-candidate><candidate>X</candidate><candidate-total>999</candidate-total></totals-by-candidate>
+</vote-totals>`),
+      ).tally,
+    ).toEqual({ kind: "buckets", yea: 214, nay: 211, present: 0, notVoting: 8 });
+  });
+
+  // A roll call the parser cannot make sense of must be quarantinable, not
+  // fatal to the other 1,572 in the run — and it must never be read as a
+  // tally. Note what these pin: an unreadable *container* reads as `none`,
+  // which is an ok verdict, so the check disables itself rather than failing
+  // if a chamber ever reshapes the element. An unreadable *row* is malformed.
+  it("never throws on a tally it cannot read, in either chamber", () => {
+    const houseCases: Array<[string, string]> = [
+      [`<vote-totals>text</vote-totals>`, "none"],
+      [`<vote-totals><totals-by-vote>text</totals-by-vote></vote-totals>`, "none"],
+      [
+        `<vote-totals><totals-by-candidate>text</totals-by-candidate></vote-totals>`,
+        "malformed",
+      ],
+    ];
+    for (const [totals, kind] of houseCases) {
+      expect(() => parseHouseVote(houseVoteXml(totals))).not.toThrow();
+      expect(parseHouseVote(houseVoteXml(totals)).tally.kind).toBe(kind);
+    }
+
+    const senateCases: Array<[string, string]> = [
+      [`<count>text</count>`, "none"],
+      [`<count><yeas><nested>1</nested></yeas></count>`, "malformed"],
+    ];
+    for (const [count, kind] of senateCases) {
+      expect(() => parseSenateVote(senateVoteXml(count))).not.toThrow();
+      expect(parseSenateVote(senateVoteXml(count)).tally.kind).toBe(kind);
+    }
+  });
+
+  it("reports no tally when vote-totals is absent", () => {
+    expect(parseHouseVote(houseVoteXml("")).tally).toEqual({ kind: "none" });
   });
 });

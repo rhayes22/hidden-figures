@@ -55,4 +55,18 @@ describe("schema", () => {
     expect(resultText).toBeDefined();
     expect(resultText?.notNull).toBe(false);
   });
+
+  it("allows roll calls without a published tally", () => {
+    const columns = getTableConfig(rollCalls).columns;
+    for (const name of [
+      "published_yea",
+      "published_nay",
+      "published_present",
+      "published_not_voting",
+    ]) {
+      const column = columns.find((c) => c.name === name);
+      expect(column, name).toBeDefined();
+      expect(column?.notNull, name).toBe(false);
+    }
+  });
 });
