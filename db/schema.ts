@@ -66,6 +66,13 @@ export const rollCalls = pgTable(
     // XML; null where the source publishes neither.
     description: text("description"),
     resultText: text("result_text"),
+    // The chamber's own count of the vote, as published alongside the
+    // per-member positions. Null together when no yea/nay tally was
+    // published. Never a computed count of vote_positions.
+    publishedYea: integer("published_yea"),
+    publishedNay: integer("published_nay"),
+    publishedPresent: integer("published_present"),
+    publishedNotVoting: integer("published_not_voting"),
     billId: text("bill_id").references(() => bills.id),
   },
   (table) => [
