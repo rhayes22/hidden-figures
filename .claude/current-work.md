@@ -127,9 +127,7 @@ CI on every PR: lint → typecheck → test → build. `main` is protected; bran
 
 ## Now
 
-Slices 1 and 2 merged. **Next: slice 3 (self-verifying ingest).** Then 4, 5, 6, 7 sequentially — 3 and 5 share `scripts/sync-votes.ts`, 2 and 7 shared the page files, so none of Phase A parallelises. Phase B follows.
-
-Data is stale (latest roll call 2026-09-17) and drifts a week per week until slice 4. Re-sync by hand with `npm run sync:votes -- 200` if a demo needs current data.
+Slices 1, 2, 3 merged. **Slice 4 (fresh data + cron) in the pipeline.** Then 5, 6, 7. Phase B follows.
 
 ## Carried findings (raised in review, deliberately not fixed yet)
 

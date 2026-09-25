@@ -5,6 +5,7 @@ import {
   chamberEnum,
   legislators,
   rollCalls,
+  syncRuns,
   votePositionEnum,
   votePositions,
 } from "./schema";
@@ -15,6 +16,28 @@ describe("schema", () => {
     expect(getTableConfig(bills).name).toBe("bills");
     expect(getTableConfig(rollCalls).name).toBe("roll_calls");
     expect(getTableConfig(votePositions).name).toBe("vote_positions");
+  });
+
+  it("records ingest runs in sync_runs", () => {
+    expect(getTableConfig(syncRuns).name).toBe("sync_runs");
+  });
+
+  it("requires every sync_runs row to say which script ran, when, and how it exited", () => {
+    const columns = getTableConfig(syncRuns).columns;
+    for (const name of ["script", "started_at", "finished_at", "exit_code"]) {
+      const column = columns.find((c) => c.name === name);
+      expect(column, name).toBeDefined();
+      expect(column?.notNull, name).toBe(true);
+    }
+  });
+
+  it("indexes sync_runs on (script, finished_at) — the reader's only query", () => {
+    const { indexes } = getTableConfig(syncRuns);
+    expect(indexes).toHaveLength(1);
+    expect(indexes[0].config.columns.map((c) => "name" in c && c.name)).toEqual([
+      "script",
+      "finished_at",
+    ]);
   });
 
   it("covers every position a member can take on a roll call", () => {

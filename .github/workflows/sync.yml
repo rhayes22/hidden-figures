@@ -1,16 +1,17 @@
 name: Sync data
 
 on:
-  # Nightly schedule is PAUSED while the UI is being built out, to avoid
-  # consistent API calls. Re-enable by uncommenting the two lines below.
-  # schedule:
-  #   # 06:00 UTC daily — after the prior legislative day is published.
-  #   - cron: "0 6 * * *"
+  schedule:
+    # 06:17 UTC daily — after the prior legislative day is published by both
+    # chambers, off-peak for clerk.house.gov and senate.gov. The minute is off
+    # the hour because GitHub queues scheduled workflows most heavily at :00
+    # and this job has no deadline.
+    - cron: "17 6 * * *"
   workflow_dispatch:
     inputs:
       votes_per_chamber:
         description: "Roll calls to sync per chamber (raise to backfill)"
-        default: "30"
+        default: "75"
 
 concurrency:
   group: sync-data
@@ -19,6 +20,9 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    # A hung run would queue the next night behind it (cancel-in-progress is
+    # false) and GitHub's default job timeout is 360 minutes.
+    timeout-minutes: 30
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       CONGRESS_GOV_API_KEY: ${{ secrets.CONGRESS_GOV_API_KEY }}
@@ -29,7 +33,15 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Members first, deliberately: if this step exits non-zero (including on
+      # the roster-size floor) the votes step is skipped and the run ingests
+      # nothing. Both scripts read the same YAML, so a roster the members sync
+      # refuses is a roster the votes sync must not trust either.
       - name: Sync members
         run: npm run sync:members
+      # 75 per chamber, sized to the busiest measured rolling 7-day window
+      # (62 Senate / 34 House): the sync walks backwards from the latest roll
+      # call, so anything older than the window is a permanent hole until
+      # someone backfills by hand. 75 self-heals a week of missed nights.
       - name: Sync votes
-        run: npm run sync:votes -- ${{ github.event.inputs.votes_per_chamber || '30' }}
+        run: npm run sync:votes -- ${{ github.event.inputs.votes_per_chamber || '75' }}

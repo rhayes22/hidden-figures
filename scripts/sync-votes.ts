@@ -9,9 +9,10 @@ import { appendFileSync } from "node:fs";
 import { sql } from "drizzle-orm";
 import { parse as parseYaml } from "yaml";
 import { db, pool } from "../db";
-import { bills, legislators, rollCalls, votePositions } from "../db/schema";
+import { bills, legislators, rollCalls, syncRuns, votePositions } from "../db/schema";
 import { parseBillId } from "../lib/ids";
 import type { LegislatorRecord } from "../lib/members";
+import { verifyRosterSize, type RosterVerdict } from "../lib/roster";
 import {
   COVERAGE_BUDGET,
   verifyCoverage,
@@ -38,6 +39,7 @@ const CONGRESS = congressForYear(YEAR);
 const SESSION = sessionForYear(YEAR);
 const LEGISLATORS_YAML =
   "https://raw.githubusercontent.com/unitedstates/congress-legislators/main/legislators-current.yaml";
+const STARTED_AT = new Date();
 
 async function fetchText(url: string): Promise<string | null> {
   const res = await fetch(url, {
@@ -114,10 +116,20 @@ async function fetchVotesBatched(
   return { votes: out, failed };
 }
 
-async function fetchHouseVotes(): Promise<FetchResult> {
+async function fetchHouseVotes(): Promise<FetchResult & { feedUnavailable: boolean }> {
   if (!(await houseRollExists(1))) {
-    console.warn(`No House votes found for ${YEAR}`);
-    return { votes: [], failed: 0 };
+    // Carried outward rather than only warned about locally, so the summary
+    // and the step summary say so too: a run that fetched no House votes at
+    // all otherwise reads as a clean run over a Senate-only corpus.
+    //
+    // The wording states the fact and does not assert breakage, because in
+    // the first days of a calendar year this branch is legitimately true —
+    // the House has simply not held roll call #1 yet. A nightly warning for
+    // two days each January is the accepted cost of the check.
+    const message = `no House roll calls are published for ${YEAR} — this run covers the Senate only`;
+    console.warn(`⚠ ${message}`);
+    annotate("warning", "House roll feed unavailable", message);
+    return { votes: [], failed: 0, feedUnavailable: true };
   }
   const latest = await findLatestHouseRoll();
   console.log(`House: latest roll call is #${latest}`);
@@ -125,7 +137,7 @@ async function fetchHouseVotes(): Promise<FetchResult> {
   for (let r = latest; r > Math.max(0, latest - VOTES_PER_CHAMBER); r--) {
     urls.push(houseUrl(r));
   }
-  return fetchVotesBatched(urls, parseHouseVote);
+  return { ...(await fetchVotesBatched(urls, parseHouseVote)), feedUnavailable: false };
 }
 
 // --- Senate: the menu lists every vote of the session ---
@@ -134,7 +146,11 @@ function senateUrl(roll: number): string {
   return `https://www.senate.gov/legislative/LIS/roll_call_votes/vote${CONGRESS}${SESSION}/vote_${CONGRESS}_${SESSION}_${String(roll).padStart(5, "0")}.xml`;
 }
 
-async function fetchSenateVotes(): Promise<FetchResult & { menuUnavailable: boolean }> {
+// Three-valued, not a boolean: HTTP 200 with zero votes is a third thing, and
+// reporting it as `ok` is a lie about it.
+type SenateMenuState = "ok" | "unavailable" | "empty";
+
+async function fetchSenateVotes(): Promise<FetchResult & { menuState: SenateMenuState }> {
   const menuXml = await fetchText(
     `https://www.senate.gov/legislative/LIS/roll_call_lists/vote_menu_${CONGRESS}_${SESSION}.xml`,
   );
@@ -145,19 +161,31 @@ async function fetchSenateVotes(): Promise<FetchResult & { menuUnavailable: bool
       "Senate vote menu unavailable",
       `no Senate roll calls could be fetched for the ${CONGRESS}th Congress, session ${SESSION} — this run covers the House only`,
     );
-    return { votes: [], failed: 0, menuUnavailable: true };
+    return { votes: [], failed: 0, menuState: "unavailable" };
   }
-  const numbers = parseSenateVoteMenu(menuXml)
-    .sort((a, b) => b - a)
-    .slice(0, VOTES_PER_CHAMBER);
+  const listed = parseSenateVoteMenu(menuXml);
+  // Measured against what the *source* yielded, before the slice below, so a
+  // run that asked for no votes (votes_per_chamber: 0) still reads as ok.
+  if (listed.length === 0) {
+    const message =
+      `the Senate vote menu was reachable but listed no roll calls for the ` +
+      `${CONGRESS}th Congress, session ${SESSION} — no Senate votes were ingested this run`;
+    console.warn(`⚠ ${message}`);
+    annotate("warning", "Senate vote menu empty", message);
+    return { votes: [], failed: 0, menuState: "empty" };
+  }
+  const numbers = listed.sort((a, b) => b - a).slice(0, VOTES_PER_CHAMBER);
   console.log(`Senate: latest roll call is #${numbers[0] ?? "none"}`);
   const urls = numbers.map((n) => senateUrl(n));
-  return { ...(await fetchVotesBatched(urls, parseSenateVote)), menuUnavailable: false };
+  return { ...(await fetchVotesBatched(urls, parseSenateVote)), menuState: "ok" };
 }
 
 // --- Roster: the LIS -> bioguide crosswalk, plus surnames for the summary ---
 
 type Roster = {
+  // How many records the YAML parsed to, for the size floor. A truncated
+  // file parses cleanly and is only detectable by its length.
+  recordCount: number;
   // LIS id -> bioguide id, for Senate positions.
   crosswalk: Map<string, string>;
   // Either id -> surname, so the summary block names who is missing rather
@@ -168,6 +196,9 @@ type Roster = {
 
 async function loadRoster(): Promise<Roster> {
   const yaml = await fetchText(LEGISLATORS_YAML);
+  // A failed fetch is a crash, not bad data — exit 1, not the roster floor's
+  // exit 2. The floor is checked in main(), where a breach can abort ahead of
+  // every write.
   if (!yaml) throw new Error("Could not fetch legislators-current.yaml");
   const records = parseYaml(yaml) as LegislatorRecord[];
   const crosswalk = new Map<string, string>();
@@ -179,7 +210,7 @@ async function loadRoster(): Promise<Roster> {
     }
     names.set(rec.id.bioguide, rec.name.last);
   }
-  return { crosswalk, names };
+  return { recordCount: records.length, crosswalk, names };
 }
 
 // --- Bills: create rows with real titles from Congress.gov ---
@@ -303,6 +334,33 @@ async function main(): Promise<number> {
     fetchSenateVotes(),
     loadRoster(),
   ]);
+
+  // Roster floors, ahead of every write. Stricter than slice 3's decision 8
+  // on purpose: a failed fetch writes nothing, while a truncated roster
+  // writes destructively — every Senate position would become no-crosswalk,
+  // which is *attributed*, so slice 3's machinery would warn and exit 0 while
+  // the nightly quietly stopped storing Senate positions.
+  //
+  // No House-only fallback: on a crosswalk breach the whole run aborts,
+  // including House positions that are keyed by bioguide and would be
+  // unaffected. One bad file means one bad night; a partial-write mode is a
+  // second code path to reason about for a failure that has never occurred.
+  const breaches = [
+    verifyRosterSize({ kind: "records", count: roster.recordCount }),
+    verifyRosterSize({ kind: "senate-crosswalk", count: roster.crosswalk.size }),
+  ].filter((v): v is Extract<RosterVerdict, { ok: false }> => !v.ok);
+  if (breaches.length > 0) {
+    for (const breach of breaches) {
+      console.error(
+        `✗ roster ${breach.kind} — ${breach.message}\n` +
+          `  source: ${LEGISLATORS_YAML}\n` +
+          `  → nothing written this run`,
+      );
+      annotate("error", "Roster size below floor", `${breach.kind} — ${breach.message}`);
+    }
+    return 2;
+  }
+
   const houseVotes = house.votes;
   const senateVotes = senate.votes;
   // Documents that never arrived. Not fatal (decision 8: rate limiting is
@@ -585,8 +643,17 @@ async function main(): Promise<number> {
         ? "⚠ documents requested but never arrived — re-run later to fill the gap"
         : "every requested document arrived"
     }`,
-    ...(senate.menuUnavailable
+    ...(house.feedUnavailable
+      ? [`  ⚠ no House roll calls are published for ${YEAR} — this run covers the Senate only`]
+      : []),
+    ...(senate.menuState === "unavailable"
       ? ["  ⚠ the Senate vote menu was unavailable — this run covers the House only"]
+      : []),
+    ...(senate.menuState === "empty"
+      ? [
+          `  ⚠ the Senate vote menu was reachable but listed no roll calls for the ` +
+            `${CONGRESS}th Congress, session ${SESSION} — no Senate votes were ingested this run`,
+        ]
       : []),
     `  positions published ${num(published).padStart(9)}`,
     `  positions stored    ${num(positionRows.length).padStart(9)}`,
@@ -617,7 +684,8 @@ async function main(): Promise<number> {
       ["no tally", num(kinds["no-tally"])],
       ["quarantined", num(quarantined.size)],
       ["documents not fetched", num(fetchFailures)],
-      ["senate vote menu", senate.menuUnavailable ? "unavailable" : "ok"],
+      ["house roll feed", house.feedUnavailable ? "unavailable" : "ok"],
+      ["senate vote menu", senate.menuState],
       ["positions published", num(published)],
       ["positions stored", num(positionRows.length)],
       ["positions skipped", num(allSkips.length)],
@@ -658,6 +726,16 @@ async function main(): Promise<number> {
 
 main()
   .then(async (exitCode) => {
+    // One row per run, recording the code the run is about to exit with —
+    // including a non-zero one, so "which night did this stop working?" is
+    // answerable. A run that throws records nothing, which is itself
+    // detectable as a missing row. The footer reads only exit_code = 0.
+    await db.insert(syncRuns).values({
+      script: "votes",
+      startedAt: STARTED_AT,
+      finishedAt: new Date(),
+      exitCode,
+    });
     await pool.end();
     if (exitCode !== 0) process.exit(exitCode);
   })
