@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+// This page says an automated job runs nightly, so it must not serve a
+// build-time freshness value from the footer forever. ISR at the same 1h
+// lifetime the detail pages use.
+export const revalidate = 3600;
+
 export const metadata: Metadata = {
   title: "About & Methodology",
   description:

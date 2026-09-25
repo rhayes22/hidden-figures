@@ -6,7 +6,9 @@ import {
   pgEnum,
   pgTable,
   primaryKey,
+  serial,
   text,
+  timestamp,
 } from "drizzle-orm/pg-core";
 
 export const chamberEnum = pgEnum("chamber", ["house", "senate"]);
@@ -96,4 +98,24 @@ export const votePositions = pgTable(
     primaryKey({ columns: [table.rollCallId, table.legislatorId] }),
     index("vote_positions_legislator_id_idx").on(table.legislatorId),
   ],
+);
+
+// One row per completed ingest run, written by both sync scripts immediately
+// before they close the pool — including when they are about to exit
+// non-zero. A run that throws records nothing, which is itself detectable as
+// a missing row. Readers filter on exitCode = 0: a run that exited 2 ran, but
+// its data cannot be vouched for.
+//
+// Standalone by design, with no FK to anything, so it survives the
+// multi-Congress rework (slice 13) and the historical roster (slice 14).
+export const syncRuns = pgTable(
+  "sync_runs",
+  {
+    id: serial("id").primaryKey(),
+    script: text("script").notNull(), // "votes" | "members"
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }).notNull(),
+    exitCode: integer("exit_code").notNull(),
+  },
+  (table) => [index("sync_runs_script_finished_at_idx").on(table.script, table.finishedAt)],
 );

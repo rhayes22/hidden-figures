@@ -57,7 +57,7 @@ are deliberately out of the MVP.
 - **Runtime:** Node 22 (pinned via `.nvmrc` + `engines`).
 - **Analytics:** Vercel Analytics.
 
-## 4. Data model (4 Postgres tables)
+## 4. Data model (5 Postgres tables)
 
 ```
 legislators
@@ -129,18 +129,21 @@ roll-call positions — votes come from the chamber XML feeds, not the API.
   Creates bill rows with real Congress.gov titles; crosswalks Senate LIS→bioguide.
 - `npm run sync:all` — members then votes.
 
-**Nightly cron:** `.github/workflows/sync.yml`. ⚠️ **The schedule is currently PAUSED**
-(the `schedule:` trigger is commented out, to avoid recurring API calls during UI
-iteration). Re-enable by uncommenting two lines. Manual runs still work via the
-Actions tab (`workflow_dispatch`, with a custom roll-calls-per-chamber count).
+**Nightly cron:** `.github/workflows/sync.yml`, **live since 2026-09-25**, running at
+06:17 UTC daily with 75 roll calls per chamber. It was paused June–September 2026; slice 3
+added the tally verification that made an unattended run safe, and slice 4 turned it back
+on. Manual runs still work via the Actions tab (`workflow_dispatch`).
+
+A fifth table, `sync_runs`, records each script's start, finish and exit code — it is what
+the site's "data checked" indicator reads.
 
 **Current data:** the 119th Congress is ingested through **2026-06-11** —
 1,414 roll calls (584 House + 830 Senate, Jan 2025 → that date), 330,867 vote positions,
 441 bills, 530 in-office members. DB size ≈ 65 MB (~13% of Neon's 500 MB free tier);
 full-Congress data fits the free tier comfortably.
 
-⚠️ **The data is behind by roughly 220 roll calls** because the cron has been paused since
-June. Catching up and re-enabling it is slice 3 of the current epic. Verified 2026-09-18.
+The data is current: the nightly cron is live again, and every page footer states the
+latest roll call and when the sync last succeeded. Verified 2026-09-25.
 
 **Known gaps in what is ingested** (all being addressed in the current epic):
 - Bill `summary` and `short_title` are NULL for all 441 bills — the columns exist, the sync
@@ -195,8 +198,6 @@ npm run dev        # http://localhost:3000  (uses the hosted Neon DB)
 > elsewhere. Long-term expansion research lives in [`docs/expansion/`](expansion/).
 
 **High-value next steps**
-1. **Re-enable the nightly cron** once iteration settles (uncomment the schedule in
-   `sync.yml`).
 2. **Full bill catalog** — ingest all bills (not just voted ones) + summaries for richer
    bill pages. Also the moment to enrich nominations with nominee names and ingest
    departed members from `legislators-historical.yaml` (recovers the skipped positions).

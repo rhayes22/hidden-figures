@@ -7,11 +7,22 @@ import "dotenv/config";
 import { notInArray, sql } from "drizzle-orm";
 import { parse } from "yaml";
 import { db, pool } from "../db";
-import { legislators } from "../db/schema";
+import { legislators, syncRuns } from "../db/schema";
 import { toLegislatorRow, type LegislatorRecord } from "../lib/members";
+import { verifyRosterSize } from "../lib/roster";
 
 const SOURCE_URL =
   "https://raw.githubusercontent.com/unitedstates/congress-legislators/main/legislators-current.yaml";
+const STARTED_AT = new Date();
+const GITHUB_ACTIONS = process.env.GITHUB_ACTIONS === "true";
+
+// Workflow commands surface a failure as an annotation on the job, so a red
+// run says what broke without anyone opening the log. Mirrors the helper in
+// sync-votes.ts.
+function annotate(level: "error" | "warning", title: string, message: string): void {
+  if (!GITHUB_ACTIONS) return;
+  console.log(`::${level} title=${title}::${message}`);
+}
 
 // Sponsorship counts from the Congress.gov member endpoint. Best-effort:
 // returns nulls on any failure so the core member sync never breaks.
@@ -62,7 +73,7 @@ async function addSponsorshipCounts(
   return filled;
 }
 
-async function main() {
+async function main(): Promise<number> {
   console.log(`Fetching ${SOURCE_URL} ...`);
   const res = await fetch(SOURCE_URL);
   if (!res.ok) {
@@ -70,6 +81,21 @@ async function main() {
   }
   const records = parse(await res.text()) as LegislatorRecord[];
   console.log(`Parsed ${records.length} current members of Congress`);
+
+  // The floor runs here: before the sponsorship fetch, before the upsert, and
+  // above all before the notInArray update below, which would retire every
+  // sitting member a truncated-but-valid parse failed to mention. Nothing is
+  // written and no Congress.gov requests are made on a breach.
+  const verdict = verifyRosterSize({ kind: "records", count: records.length });
+  if (!verdict.ok) {
+    console.error(
+      `✗ roster ${verdict.kind} — ${verdict.message}\n` +
+        `  source: ${SOURCE_URL}\n` +
+        `  → nothing written this run`,
+    );
+    annotate("error", "Roster size below floor", `${verdict.kind} — ${verdict.message}`);
+    return 2;
+  }
 
   const rows = records
     .map(toLegislatorRow)
@@ -131,10 +157,23 @@ async function main() {
     ORDER BY chamber
   `);
   console.log("In-office members by chamber:", counts.rows);
+  return 0;
 }
 
 main()
-  .then(() => pool.end())
+  .then(async (exitCode) => {
+    // One row per run, recording the code the run is about to exit with —
+    // including a non-zero one. A run that throws records nothing, which is
+    // itself detectable as a missing row.
+    await db.insert(syncRuns).values({
+      script: "members",
+      startedAt: STARTED_AT,
+      finishedAt: new Date(),
+      exitCode,
+    });
+    await pool.end();
+    if (exitCode !== 0) process.exit(exitCode);
+  })
   .catch((err) => {
     console.error(err);
     pool.end();

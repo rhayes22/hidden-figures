@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
+import { Suspense } from "react";
 import "./globals.css";
+import DataFreshness from "@/components/data-freshness";
 import { SITE_URL } from "@/lib/site";
 import { Analytics } from "@vercel/analytics/next";
 
@@ -163,10 +165,17 @@ export default function RootLayout({
                 </ul>
               </div>
             </div>
-            <p className="mt-8 border-t border-gray-200 pt-4 text-xs text-gray-500">
-              Not affiliated with any government body. Official records are
-              linked above.
-            </p>
+            <div className="mt-8 flex flex-col gap-2 border-t border-gray-200 pt-4 sm:flex-row sm:items-baseline sm:justify-between">
+              <p className="text-xs text-gray-500">
+                Not affiliated with any government body. Official records are
+                linked above.
+              </p>
+              {/* Never blocks the page's HTML: a slow database degrades to a
+                  missing line rather than a slow site. */}
+              <Suspense fallback={null}>
+                <DataFreshness />
+              </Suspense>
+            </div>
           </div>
         </footer>
         <Analytics />

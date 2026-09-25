@@ -29,6 +29,13 @@
       "when": 1790295164449,
       "tag": "0003_volatile_shatterstar",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790301800803,
+      "tag": "0004_shiny_masque",
+      "breakpoints": true
     }
   ]
 }
