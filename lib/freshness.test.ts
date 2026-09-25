@@ -55,6 +55,23 @@ describe("assessFreshness", () => {
     });
   });
 
+  it("floors the day count — 5d23h is 5 days, not 6", () => {
+    // The rule the rounding exists for: these pages are cached for up to an
+    // hour, so a count that rounded up would move by a day inside a cache
+    // entry. An exact multiple of 24h cannot tell floor from ceil, so the
+    // age here is deliberately not one.
+    const verdict = assessFreshness({
+      latestVoteDate: "2026-09-24",
+      lastCheckedAt: checkedAgo(5 * 24 * HOUR + 23 * HOUR),
+      now: NOW,
+    });
+    expect(verdict).toEqual({
+      kind: "stale",
+      checkedDate: "2026-09-19",
+      daysSinceCheck: 5,
+    });
+  });
+
   it("is unknown when no successful sync is on record", () => {
     expect(
       assessFreshness({
