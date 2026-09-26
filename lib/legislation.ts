@@ -46,6 +46,14 @@ export function categoryForRollCall(input: {
 
 // The lead text a roll call is headlined with. An amendment vote leads with the
 // amendment's own description; everything else leads with the bill title.
+//
+// A short title is deliberately absent from this chain. Measured 2026-09-25:
+// it would change roughly three of 509 bills, Congress.gov publishes none for
+// the resolution types whose titles are actually long, and the selection rule
+// picks a different bill's name on s-1318-119. If a future slice populates
+// bills.short_title, it enters *here* and at app/bills/page.tsx's grouped-bill
+// card, which is the one remaining inline `bill_title ?? question` — both must
+// change together or <title> and <h1> will describe the same vote differently.
 export function leadTextFor(input: {
   question: string;
   billType: string | null;

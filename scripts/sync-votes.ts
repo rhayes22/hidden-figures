@@ -1,5 +1,6 @@
 // Syncs recent roll calls from both chambers into roll_calls + vote_positions,
-// creating bills rows (with real titles from Congress.gov) for linked bills.
+// creating bills rows (with real titles and CRS summaries from Congress.gov)
+// for linked bills.
 // Idempotent: everything upserts by natural id. Usage:
 //   npm run sync:votes            # latest 30 per chamber
 //   npm run sync:votes -- 50      # latest 50 per chamber
@@ -10,6 +11,7 @@ import { sql } from "drizzle-orm";
 import { parse as parseYaml } from "yaml";
 import { db, pool } from "../db";
 import { bills, legislators, rollCalls, syncRuns, votePositions } from "../db/schema";
+import { summaryTextFor, type ApiSummary } from "../lib/bill-summary";
 import { parseBillId } from "../lib/ids";
 import type { LegislatorRecord } from "../lib/members";
 import { verifyRosterSize, type RosterVerdict } from "../lib/roster";
@@ -213,34 +215,153 @@ async function loadRoster(): Promise<Roster> {
   return { recordCount: records.length, crosswalk, names };
 }
 
-// --- Bills: create rows with real titles from Congress.gov ---
+// --- Bills: create rows with real titles and CRS summaries from Congress.gov ---
 
 type BillRow = typeof bills.$inferInsert;
 
+// The delay before the one retry each of the two Congress.gov requests below
+// makes. Why they retry is at each call site; the short version is that
+// losing a summary document costs nothing and losing a detail document costs
+// real data.
+const RETRY_MS = 500;
+
+// How a request that produced no usable JSON is named in a warning.
+//
+// Both Congress.gov requests below are wrapped, because a non-ok status is
+// only one of three ordinary ways a request fails: fetch() itself rejects on
+// a connection reset, a DNS blip or a TLS failure, and res.json() throws when
+// a 200 carries an edge cache's HTML error page. Neither may escape
+// fetchBillRow — it runs inside the Promise.all in upsertBills, which runs
+// before a single roll call or vote position is written, so one bad socket on
+// one bill would cost the whole night: no roll calls, no positions, no
+// sync_runs row, and therefore the 48-hour stale alarm in
+// components/data-freshness.tsx firing on a sync that was fine. Bill metadata
+// is the cosmetic half of this script (slice 3, decision 8) and must never
+// take the rest of it down.
+//
+// The reason is forwarded to annotate(), which writes a workflow annotation on
+// a public repo, so the api key is masked out of it: a res.json() SyntaxError
+// embeds the first bytes of the response body, and an edge error page that
+// echoes the request URL would otherwise publish the key. The empty check is
+// load-bearing — replaceAll("") inserts the mask between every character.
+function failureReason(err: unknown, apiKey: string): string {
+  const reason =
+    err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+  return apiKey ? reason.replaceAll(apiKey, "***") : reason;
+}
+
+// The summaries sub-resource is a second document: the base bill endpoint
+// carries only a pointer to it, so there is no cheaper shape available.
+//
+// limit=250 is required, not cosmetic — the default page size is 20, and the
+// sibling /titles endpoint was measured truncating at 20 of 37 for s-2296-119.
+// Summaries top out at 5 today, so the cap costs nothing and closes the
+// failure mode permanently.
+async function fetchBillSummary(
+  id: string,
+  congress: number,
+  billType: string,
+  number: number,
+  apiKey: string,
+): Promise<string | null> {
+  const url = `https://api.congress.gov/v3/bill/${congress}/${billType}/${number}/summaries?format=json&limit=250&api_key=${apiKey}`;
+  // One retry on any failure: 10 of 509 summary requests (2.0%) returned HTTP
+  // 503 on first attempt in the 2026-09-25 sweep, and all ten succeeded on a
+  // plain retry. A reset socket and a bad body get the same second chance.
+  let reason = "no response";
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, RETRY_MS));
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        const body = (await res.json()) as { summaries?: ApiSummary[] };
+        return summaryTextFor(body.summaries ?? []);
+      }
+      reason = `HTTP ${res.status}`;
+    } catch (err) {
+      reason = failureReason(err, apiKey);
+    }
+  }
+  // Warn and continue (slice 3, decision 8: fetch-side failures are not
+  // fatal). A missing summary is cosmetic and self-heals on the next night —
+  // and the upsert coalesces, so nothing stored is lost in the meantime.
+  console.warn(
+    `⚠ Congress.gov ${reason} for ${id} summaries after a retry — any stored summary is preserved`,
+  );
+  annotate(
+    "warning",
+    "Bill summary fetch failed",
+    `${id} — the summaries endpoint failed twice (${reason}); any stored summary is preserved`,
+  );
+  return null;
+}
+
+type BillDetail = {
+  title?: string;
+  latestAction?: { actionDate?: string; text?: string };
+};
+
+// The pre-existing title request, now guarded the same way and given the same
+// two attempts. Its non-ok branch already fell back to a placeholder title; a
+// rejecting fetch or a throwing res.json() reaches that same branch instead of
+// aborting the run.
+//
+// The retry matters more here than on the summaries endpoint, not less. A
+// failed summaries request returns null and the coalesce upsert preserves what
+// is stored, so it costs nothing. A failed detail request writes the
+// placeholder "HR 1234" over the real title and NULLs status and
+// latest_action_date, which are bare excluded.* writes — both are rendered
+// (/votes/[id]'s <h1>, /bills' status line). Nothing repairs it either: the
+// nightly only revisits bills reachable from the latest 75 roll calls per
+// chamber, so once a bill's roll calls age out of that window the placeholder
+// is permanent short of a hand-run sync of the right session.
+async function fetchBillDetail(
+  id: string,
+  congress: number,
+  billType: string,
+  number: number,
+  apiKey: string,
+): Promise<BillDetail | null> {
+  const url = `https://api.congress.gov/v3/bill/${congress}/${billType}/${number}?format=json&api_key=${apiKey}`;
+  let reason = "no response";
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, RETRY_MS));
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        return ((await res.json()) as { bill?: BillDetail }).bill ?? null;
+      }
+      reason = `HTTP ${res.status}`;
+    } catch (err) {
+      reason = failureReason(err, apiKey);
+    }
+  }
+  console.warn(
+    `Congress.gov ${reason} for ${id} after a retry; using placeholder title`,
+  );
+  annotate(
+    "warning",
+    "Bill detail fetch failed",
+    `${id} — the bill endpoint failed twice (${reason}); any stored title is replaced with a placeholder, and status and latest action date are cleared`,
+  );
+  return null;
+}
+
 async function fetchBillRow(id: string, apiKey: string): Promise<BillRow> {
   const { billType, number, congress } = parseBillId(id);
-  const res = await fetch(
-    `https://api.congress.gov/v3/bill/${congress}/${billType}/${number}?format=json&api_key=${apiKey}`,
-  );
-  const bill = res.ok
-    ? (
-        (await res.json()) as {
-          bill?: {
-            title?: string;
-            latestAction?: { actionDate?: string; text?: string };
-          };
-        }
-      ).bill
-    : null;
-  if (!res.ok) {
-    console.warn(`Congress.gov ${res.status} for ${id}; using placeholder title`);
-  }
+  // Two documents per bill, issued concurrently. Neither helper rejects, so
+  // this Promise.all cannot either.
+  const [bill, summary] = await Promise.all([
+    fetchBillDetail(id, congress, billType, number, apiKey),
+    fetchBillSummary(id, congress, billType, number, apiKey),
+  ]);
   return {
     id,
     congress,
     billType,
     number,
     title: bill?.title ?? `${billType.toUpperCase()} ${number}`,
+    summary,
     status: bill?.latestAction?.text ?? null,
     latestActionDate: bill?.latestAction?.actionDate ?? null,
   };
@@ -251,7 +372,19 @@ async function upsertBills(billIds: string[]): Promise<void> {
   if (!apiKey) throw new Error("CONGRESS_GOV_API_KEY is not set");
   if (billIds.length === 0) return;
 
-  // Fetch titles in parallel batches (rate limit is 5,000/hr), then one upsert.
+  // Fetch each bill's title and summary in parallel batches, then one upsert.
+  // Two documents are fetched per bill, so peak in-flight against
+  // api.congress.gov goes from 12 to 24, with no pause between batches.
+  //
+  // The binding constraint is burst concurrency against one origin, not the
+  // hourly quota. The quota is 20,000/hr and a 60-bill night spends ~120
+  // requests against it, 0.6% — a share that predicts nothing, because the
+  // failures this script actually sees are not quota failures: the 2026-09-25
+  // sweep measured 10 of 509 requests (2.0%) returning HTTP 503 at BATCH=5
+  // with 250 ms pauses, i.e. about 5 in flight, four orders of magnitude under
+  // the quota. At 24 in flight with no pause, expect that rate or worse. Both
+  // fetch helpers retry once for exactly this reason — that retry is what
+  // keeps a 503 from writing a placeholder title over a real one.
   const BATCH = 12;
   const rows: BillRow[] = [];
   for (let i = 0; i < billIds.length; i += BATCH) {
@@ -266,6 +399,12 @@ async function upsertBills(billIds: string[]): Promise<void> {
       target: bills.id,
       set: {
         title: sql`excluded.title`,
+        // coalesce, not a bare excluded.*: a summaries request that fails
+        // twice yields null on the row, and an unconditional write would
+        // clear a stored summary on one bad night — the same class of bug as
+        // sync-members.ts's sponsorship nulling. A bill that genuinely has no
+        // summary has nothing stored to preserve and still lands as NULL.
+        summary: sql`coalesce(excluded.summary, "bills"."summary")`,
         status: sql`excluded.status`,
         latestActionDate: sql`excluded.latest_action_date`,
       },
@@ -413,7 +552,7 @@ async function main(): Promise<number> {
 
   // Bills first (FK target), then roll calls, then positions.
   const billIds = [...new Set(writable.map((v) => v.billId).filter((b): b is string => b !== null))];
-  console.log(`Fetching titles for ${billIds.length} linked bills from Congress.gov`);
+  console.log(`Fetching titles and summaries for ${billIds.length} linked bills from Congress.gov`);
   await upsertBills(billIds);
 
   if (writable.length > 0) {
