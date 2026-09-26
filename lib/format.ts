@@ -72,7 +72,15 @@ export function partyBreakdown(
 
 // Clamps text to a budget that has a hard limit elsewhere (a <title>, a meta
 // description); the ellipsis occupies the final character.
+//
+// The max <= 0 guard is not theoretical: slice(0, -1) counts from the end, so
+// without it a budget of 0 returns the whole input plus an ellipsis —
+// truncate("Hello world", 0) returned "Hello worl…", eleven characters for a
+// budget of zero. Reachable now that /votes/[id] passes a computed budget
+// (META_DESCRIPTION_MAX minus a prefix whose length varies with the chamber
+// name and the formatted date).
 export function truncate(text: string, max: number): string {
+  if (max <= 0) return "";
   return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
 }
 

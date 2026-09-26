@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { BackLink } from "@/components/back-link";
-import { ExpandableTitle } from "@/components/expandable-title";
+import { ExpandableText } from "@/components/expandable-title";
 import { VoteRoster, type RosterMember } from "@/components/vote-roster";
 import { VoteStatusBadge } from "@/components/vote-status";
 import {
@@ -28,7 +28,8 @@ type Props = { params: Promise<{ id: string }> };
 async function getRollCall(id: string) {
   const rows = await db.execute(sql`
     SELECT rc.id, rc.chamber, rc.vote_date, rc.question, rc.result,
-           rc.description, rc.bill_id, b.bill_type, b.title AS bill_title
+           rc.description, rc.bill_id, b.bill_type, b.title AS bill_title,
+           b.summary AS bill_summary
     FROM roll_calls rc
     LEFT JOIN bills b ON b.id = rc.bill_id
     WHERE rc.id = ${id}
@@ -44,6 +45,7 @@ async function getRollCall(id: string) {
     bill_id: string | null;
     bill_type: string | null;
     bill_title: string | null;
+    bill_summary: string | null;
   } | null;
 }
 
@@ -94,6 +96,11 @@ function Tile({
   );
 }
 
+// Search results cut a description off around here, so the budget is explicit.
+// A summary is prefixed with the chamber and the date and clamped to what is
+// left; the fallback sentence names both already and takes the whole budget.
+const META_DESCRIPTION_MAX = 160;
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
   const rc = await getRollCall(id);
@@ -104,9 +111,40 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     billTitle: rc.bill_title,
     description: rc.description,
   });
+  const chamber = rc.chamber === "senate" ? "Senate" : "House";
+  const date = formatDate(rc.vote_date);
+  // An amendment roll call joins its *parent* bill, so rc.bill_summary is that
+  // bill's summary and not this vote's subject. The rendered page labels it as
+  // the parent bill's; a search snippet carries no such label, and one that
+  // described different legislation than the title beside it would be worse
+  // than the generic sentence. So an amendment vote takes the fallback.
+  const summary =
+    categoryForRollCall({ question: rc.question, billType: rc.bill_type }) ===
+    "amendment"
+      ? null
+      : rc.bill_summary;
+  // The summary's opening is what a search result should show, and it says
+  // nothing about which chamber voted or when — hence the prefix. Its stored
+  // paragraph breaks must not reach a meta tag, so they collapse to spaces
+  // before truncation.
+  //
+  // The fallback sentence takes no prefix: it already names the chamber and
+  // the date, so prefixing it would spend ~29 of the 160 characters saying
+  // them twice and leave the subject ~65 characters where it used to get ~94.
+  const prefix = `${chamber} vote, ${date}: `;
+  const description = summary
+    ? prefix +
+      truncate(
+        summary.replace(/\s*\n+\s*/g, " "),
+        META_DESCRIPTION_MAX - prefix.length,
+      )
+    : truncate(
+        `Full roll-call vote: how every member of the U.S. ${chamber} voted on ${subject} (${date}).`,
+        META_DESCRIPTION_MAX,
+      );
   return {
     title: `${truncate(subject, 70)} — ${rc.result}`,
-    description: `Full roll-call vote: how every member of the U.S. ${rc.chamber === "senate" ? "Senate" : "House"} voted on ${truncate(subject, 150)} (${formatDate(rc.vote_date)}).`,
+    description,
   };
 }
 
@@ -164,7 +202,15 @@ export default async function VotePage({ params }: Props) {
         <span className="text-gray-400">{formatDate(rc.vote_date)}</span>
       </div>
 
-      <ExpandableTitle text={fullTitle} />
+      <ExpandableText
+        text={fullTitle}
+        as="h1"
+        clamp={2}
+        longerThan={70}
+        measureClipping={false}
+        expandLabel="Show full title"
+        className="text-2xl font-bold text-gray-900 sm:text-3xl"
+      />
       {fullTitle !== rc.question && (
         <p className="mt-1 text-gray-600">{rc.question}</p>
       )}
@@ -172,6 +218,33 @@ export default async function VotePage({ params }: Props) {
         <p className="mt-1 text-gray-600">
           Amendment to {billNumber} · {rc.bill_title}
         </p>
+      )}
+      {/* CRS summary, stored as plain text at ingest — never HTML, so there
+          is no dangerouslySetInnerHTML here. 53 of 509 bills have none and
+          render nothing extra. */}
+      {rc.bill_summary && (
+        <>
+          {/* The summary is joined through rc.bill_id, which on an amendment
+              roll call is the parent bill's — so it is labelled as the parent
+              bill's rather than left to read as this vote's subject. The
+              -mb-2 collapses against the summary block's own mt-3, so the
+              label sits tight to the text it attributes rather than midway
+              between that text and the line above. */}
+          {isAmendment && (
+            <p className="-mb-2 mt-3 text-sm font-semibold text-gray-600">
+              What {billNumber} does
+            </p>
+          )}
+          <ExpandableText
+            text={rc.bill_summary}
+            as="p"
+            clamp={6}
+            longerThan={210}
+            measureClipping
+            expandLabel="Show full summary"
+            className="whitespace-pre-line text-gray-700"
+          />
+        </>
       )}
 
       {/* Scoreboard + party breakdown */}

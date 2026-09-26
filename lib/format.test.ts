@@ -93,3 +93,55 @@ describe("truncate boundaries", () => {
     expect(subject.startsWith(clamped.slice(0, -1))).toBe(true);
   });
 });
+
+// --- Slice 5: a computed budget can land at or below zero ------------------
+// /votes/[id] now passes META_DESCRIPTION_MAX minus a prefix whose length
+// varies with the chamber name and the formatted date, so the budget is no
+// longer a literal. Before the guard, slice(0, -1) counted from the end and
+// truncate("Hello world", 0) returned "Hello worl…" — longer than the input
+// budget, and longer than the input is allowed to be.
+
+describe("truncate with a non-positive budget", () => {
+  it("returns an empty string for a budget of 0", () => {
+    expect(truncate("Hello world", 0)).toBe("");
+  });
+
+  it("returns an empty string for a negative budget", () => {
+    expect(truncate("Hello world", -3)).toBe("");
+  });
+
+  it("returns just the ellipsis for a budget of 1", () => {
+    expect(truncate("Hello world", 1)).toBe("…");
+  });
+
+  it("never returns more than max characters, for any budget", () => {
+    const samples = ["", "a", "Hello world", "x ".repeat(120), "é".repeat(40)];
+    for (const max of [-5, 0, 1, 2, 10, 70, 160]) {
+      for (const s of samples) {
+        expect(truncate(s, max).length).toBeLessThanOrEqual(Math.max(0, max));
+      }
+    }
+  });
+
+  // The shape /votes/[id]'s generateMetadata actually composes:
+  //   prefix + truncate(body, META_DESCRIPTION_MAX - prefix.length)
+  // The guard is what makes the whole string fit the budget once the prefix
+  // eats all of it. Asserted across every prefix length up to the budget,
+  // because the prefix grows with the chamber name and the formatted date.
+  it("keeps a prefix-plus-clamped-body composition inside the budget", () => {
+    const MAX = 160;
+    const bodies = [
+      "",
+      "Short.",
+      "This bill requires states to provide such information as the Department of Justice may require for the purpose of investigating alleged fraud.",
+      "x".repeat(200_000),
+    ];
+    for (let prefixLength = 0; prefixLength <= MAX; prefixLength++) {
+      const prefix = "p".repeat(prefixLength);
+      for (const body of bodies) {
+        const composed = prefix + truncate(body, MAX - prefix.length);
+        expect(composed.length).toBeLessThanOrEqual(MAX);
+      }
+    }
+  });
+});
